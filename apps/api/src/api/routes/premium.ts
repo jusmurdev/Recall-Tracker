@@ -11,7 +11,7 @@ import { AiProviderError, AiRefusalError, listProviders } from "../../ai/index.j
 import { canRefresh, isFresh, restaurantKey } from "../../premium/restaurantResearch.js";
 import { findRecallsForItem } from "../../matching/engine.js";
 import { Prisma } from "@prisma/client";
-import { gradeOf } from "../../inspections/grade.js";
+import { gradeOf, safetyRating } from "../../inspections/grade.js";
 import { adapterFor, syncGrade } from "../../inspections/sync.js";
 import { enqueueGradeSync } from "../../jobs/queues.js";
 import { HttpProblem, requirePremium } from "../plugins/auth.js";
@@ -196,6 +196,7 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
         activeRecalls: active,
         watchItemId: p.watchItems[0]?.id ?? null,
         grade: gradeOf(p),
+        rating: safetyRating(p, active),
       });
     }
     return { items };

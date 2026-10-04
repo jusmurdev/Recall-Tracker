@@ -10,8 +10,8 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
     const user = requireUser(req);
     const q = z
       .object({
-        unreadOnly: z.coerce.boolean().default(false),
-        includeDismissed: z.coerce.boolean().default(false),
+        unreadOnly: z.enum(["true", "false", "1", "0"]).default("false").transform((v) => v === "true" || v === "1"),
+        includeDismissed: z.enum(["true", "false", "1", "0"]).default("false").transform((v) => v === "true" || v === "1"),
         limit: z.coerce.number().int().min(1).max(100).default(50),
       })
       .parse(req.query);

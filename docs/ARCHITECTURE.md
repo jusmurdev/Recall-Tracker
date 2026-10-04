@@ -129,6 +129,20 @@ Location is a phone-side capability with a deliberately thin server footprint:
   may send the photo; `premium/receiptDecode.ts` asks Claude for clean product names when
   the dictionary falls short.
 
+## Restaurant map (`inspections/discover.ts`, `api/routes/restaurants.ts`)
+
+`GET /v1/restaurants/map?lat&lng&radiusKm` is free. It first calls `discoverAround()`, which
+asks the inspection adapter covering that point (NYC: latitude/longitude bounding box;
+Chicago: `within_circle(location, …)`) for every graded venue in range and upserts them into
+the catalog as untracked profiles with their latest inspection. Results are cached per ~1 km
+cell + radius in `DiscoveryCell` for 7 days. It then returns catalog venues within the radius
+with `gradeOf()` and `safetyRating()`: health grade sets the base (A/Pass 5, B/conditional
+3.5, C/Fail 2), minus 0.5 per active supplier recall (max 1.5) and 0.5 for recorded
+food-safety complaints; no grade means no stars rather than a fake number.
+`GET /v1/restaurants/:profileId` is the public page (no supplier research; that's premium).
+The app renders Apple Maps / Google Maps via react-native-maps with pins coloured by rating and
+a distance-sorted list; on web a radar-style preview stands in.
+
 ## AI providers (`ai/`)
 
 `runStructured(userId, request)` is the one entry point for premium AI: prompt + zod schema

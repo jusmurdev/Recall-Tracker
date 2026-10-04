@@ -70,6 +70,10 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 - **Bring your own model.** Premium AI runs on Claude, OpenAI, Google Gemini, or any
   OpenAI-compatible endpoint (Ollama, Groq, Together…), chosen per feature by capability with
   automatic fallback. See [docs/PREMIUM.md](docs/PREMIUM.md#ai-providers).
+- **Restaurant map (free).** A map of restaurants around you with a 1–5 safety rating from
+  the health grade and recall exposure, fed by the shared catalog plus the local health
+  department's open data where we have an adapter. Tap a pin for grade, inspection history and
+  recalls touching the kitchen; tracking from there is Premium.
 - **Health grades.** Official inspection grades and violation history from health-department
   open data (NYC and Chicago adapters; AI research elsewhere), refreshed weekly and shared.
   Trackers are notified when a grade drops.

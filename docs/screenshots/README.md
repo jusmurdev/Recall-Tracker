@@ -2,7 +2,8 @@
 
 Captured from the Expo **web export** of the mobile app at iPhone 14 size (390×844 @2x, light
 mode) against the API loaded with recorded fixtures and the demo seed. Native-only features
-(camera, OCR, geofencing, push) show their permission/fallback states on web.
+(camera, OCR, geofencing, push) show their permission/fallback states on web, and the map
+shows a radar-style preview instead of Apple/Google Maps.
 
 | | | |
 | --- | --- | --- |
@@ -13,7 +14,8 @@ mode) against the API loaded with recorded fixtures and the demo seed. Native-on
 | ![](05-watch-new.png) Add a brand | ![](06-subscribe.png) Follow a category | ![](07-restaurant-detail.png) Restaurant + health grade |
 | ![](08-restaurant-add.png) Add restaurant | ![](08b-restaurant-catalog-search.png) Catalog search | ![](09-alerts.png) Alerts |
 | ![](10-alert-detail.png) Alert detail | ![](11-restaurant-updates.png) Restaurant updates | ![](12-premium.png) Premium |
-| ![](13-connectors.png) Connected accounts | ![](14-settings.png) You | |
+| ![](13-connectors.png) Connected accounts | ![](14-settings.png) You | ![](15-map.png) Restaurants near you |
+| ![](16-restaurant-public.png) Restaurant page | | |
 
 ## Regenerate
 
@@ -32,4 +34,5 @@ node scripts/serve-web-export.mjs dist     # port 8080
 # 3. Capture (needs `playwright` + a Chromium: npx playwright install chromium)
 node scripts/screenshots.mjs ../../docs/screenshots
 node scripts/screenshots-scan.mjs ../../docs/screenshots   # drives the product + receipt scan flows
+node scripts/screenshots-map.mjs ../../docs/screenshots    # map + public restaurant page (mock location)
 ```

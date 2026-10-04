@@ -37,5 +37,9 @@ Screens (`app/`):
   grade copy); `src/lib/theme.ts` holds the palette
 - `recall/[id]`, `alert/[id]`, `watch/new`, `watch/restaurant` (premium), `watch/[id]`
 - `premium/index`, `premium/connectors` (MCP account linking + import)
+- `map` (restaurants near you with safety ratings; react-native-maps), `restaurant/[id]` (public page)
+
+Maps: iOS uses Apple Maps with no key. Android needs a Google Maps key in `app.json`
+(`android.config.googleMaps.apiKey`).
 
 Everything that crosses the network is typed by `@recall/shared`.

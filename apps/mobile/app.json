@@ -14,7 +14,8 @@
       "buildNumber": "1",
       "usesAppleSignIn": false,
       "config": {
-        "usesNonExemptEncryption": false
+        "usesNonExemptEncryption": false,
+        "googleMapsApiKey": ""
       },
       "infoPlist": {
         "NSCameraUsageDescription": "Scan product labels and barcodes to check them against recalls.",
@@ -45,6 +46,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F7F4EE"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": ""
+        }
       }
     },
     "plugins": [

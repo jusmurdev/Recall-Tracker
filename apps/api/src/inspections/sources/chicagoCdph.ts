@@ -6,7 +6,7 @@
  */
 import { fetchJson } from "../../lib/http.js";
 import { normalizeName, pickBestVenue } from "../match.js";
-import type { InspectionAdapter, InspectionRecord, InspectionViolation } from "../types.js";
+import type { DiscoveredVenue, InspectionAdapter, InspectionRecord, InspectionViolation } from "../types.js";
 
 export interface ChicagoRow {
   inspection_id: string;
@@ -29,12 +29,13 @@ export interface ChicagoRow {
 
 export const CHICAGO_URL = "https://data.cityofchicago.org/resource/4ijn-s7e5.json";
 
-export function chicagoUrl(opts: { license?: string; name?: string }, appToken?: string): string {
+export function chicagoUrl(opts: { license?: string; name?: string; circle?: { lat: number; lng: number; meters: number } }, appToken?: string): string {
   const params = new URLSearchParams();
   if (opts.license) params.set("license_", opts.license);
+  else if (opts.circle) params.set("$where", `within_circle(location, ${opts.circle.lat}, ${opts.circle.lng}, ${Math.round(opts.circle.meters)}) AND facility_type like '%Restaurant%'`);
   else if (opts.name) params.set("$where", `upper(dba_name) like '%${opts.name.toUpperCase().replace(/'/g, "''").replace(/[%_]/g, "")}%'`);
   params.set("$order", "inspection_date DESC");
-  params.set("$limit", "200");
+  params.set("$limit", opts.circle ? "3000" : "200");
   if (appToken) params.set("$$app_token", appToken);
   return `${CHICAGO_URL}?${params.toString()}`;
 }
@@ -78,12 +79,34 @@ export function chicagoRecord(r: ChicagoRow): (InspectionRecord & { license: str
   };
 }
 
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
 export class ChicagoCdphAdapter implements InspectionAdapter {
   readonly source = "chicago_cdph";
   constructor(private readonly fetcher: <T>(url: string) => Promise<T> = (url) => fetchJson(url), private readonly appToken?: string) {}
 
   covers(p: { city: string | null; state: string | null }): boolean {
     return p.state?.toUpperCase() === "IL" && (p.city ?? "").trim().toLowerCase() === "chicago";
+  }
+
+  coversPoint(lat: number, lng: number): boolean {
+    return lat >= 41.64 && lat <= 42.03 && lng >= -87.95 && lng <= -87.52;
+  }
+
+  async discover(lat: number, lng: number, radiusKm: number): Promise<DiscoveredVenue[]> {
+    const rows = await this.fetcher<ChicagoRow[]>(chicagoUrl({ circle: { lat, lng, meters: radiusKm * 1000 } }, this.appToken));
+    const byKey = new Map<string, DiscoveredVenue>();
+    for (const r of Array.isArray(rows) ? rows : []) {
+      const rec = chicagoRecord(r);
+      if (!rec || rec.latitude == null || rec.longitude == null) continue;
+      const key = rec.license ?? rec.name;
+      const { license, name, latitude, longitude, ...insp } = rec;
+      const existing = byKey.get(key);
+      if (!existing) byKey.set(key, { source: this.source, externalId: license ?? name, name: titleCase(name), address: r.address ? titleCase(r.address) : null, city: "Chicago", state: "IL", latitude, longitude, latest: insp });
+    }
+    return [...byKey.values()];
   }
 
   async lookup(profile: { name: string; city: string | null; state: string | null; latitude: number | null; longitude: number | null; gradeExternalId: string | null }): Promise<InspectionRecord[]> {

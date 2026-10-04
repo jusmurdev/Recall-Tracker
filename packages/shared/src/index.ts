@@ -459,6 +459,63 @@ export const CatalogRestaurant = z.object({
 });
 export type CatalogRestaurant = z.infer<typeof CatalogRestaurant>;
 
+/** 1–5 safety rating shown on the map: health grade first, then recall exposure. */
+export const SafetyRating = z.object({
+  stars: z.number().min(1).max(5).nullable(),
+  reason: z.string(),
+  level: z.enum(["good", "ok", "poor", "unknown"]),
+});
+export type SafetyRating = z.infer<typeof SafetyRating>;
+
+/** A pin on the map. Free to view; tracking is premium. */
+export const MapRestaurant = z.object({
+  profileId: z.string(),
+  name: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  latitude: z.number(),
+  longitude: z.number(),
+  distanceKm: z.number(),
+  grade: RestaurantGrade,
+  rating: SafetyRating,
+  activeRecalls: z.number().int(),
+  trackedBy: z.number().int(),
+  /** Set when the current user tracks it. */
+  watchItemId: z.string().nullable(),
+});
+export type MapRestaurant = z.infer<typeof MapRestaurant>;
+
+export const MapResponse = z.object({
+  items: z.array(MapRestaurant),
+  /** Where the venues came from this time: open data pulled now, cached, or catalog only. */
+  discovery: z.object({ source: z.string().nullable(), fetched: z.number().int(), cached: z.boolean() }),
+  center: z.object({ latitude: z.number(), longitude: z.number() }),
+  radiusKm: z.number(),
+});
+export type MapResponse = z.infer<typeof MapResponse>;
+
+/** Public restaurant page (no research; that is premium). */
+export const PublicRestaurant = z.object({
+  profileId: z.string(),
+  name: z.string(),
+  address: z.string().nullable(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  website: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  grade: RestaurantGrade,
+  rating: SafetyRating,
+  inspections: z.array(Inspection),
+  activeRecalls: z.number().int(),
+  matchedRecalls: z.array(ScanMatch),
+  trackedBy: z.number().int(),
+  watchItemId: z.string().nullable(),
+  researched: z.boolean(),
+});
+export type PublicRestaurant = z.infer<typeof PublicRestaurant>;
+
 /** A known restaurant near the user, with whether its suppliers currently have recalls. */
 export const NearbyRestaurant = z.object({
   profileId: z.string(),

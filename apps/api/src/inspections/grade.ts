@@ -57,3 +57,32 @@ export function compareLevels(prev: GradeLevel, next: GradeLevel): "worse" | "be
   if (RANK[next] > RANK[prev]) return "better";
   return "same";
 }
+
+export interface SafetyRating {
+  /** 1–5 in half steps; null when there is nothing to rate on. */
+  stars: number | null;
+  /** One line explaining the number. */
+  reason: string;
+  level: GradeLevel;
+}
+
+/**
+ * The "rating" on the map: health grade first, then recall exposure. Honest about gaps:
+ * no grade → no stars, not a fake 3.
+ */
+export function safetyRating(p: Pick<RestaurantProfile, "currentGrade" | "currentScore" | "gradeScale">, activeRecalls: number, riskSignals = 0): SafetyRating {
+  const { level } = interpretGrade(p.currentGrade, p.currentScore, p.gradeScale);
+  if (level === "unknown") return { stars: null, reason: activeRecalls ? `${activeRecalls} supplier recall${activeRecalls > 1 ? "s" : ""}, no inspection grade yet` : "No inspection grade yet", level };
+  let stars = level === "good" ? 5 : level === "ok" ? 3.5 : 2;
+  const reasons: string[] = [level === "good" ? "Passed inspection cleanly" : level === "ok" ? "Passed with some violations" : "Serious inspection problems"];
+  if (activeRecalls) {
+    stars -= Math.min(1.5, 0.5 * activeRecalls);
+    reasons.push(`${activeRecalls} active supplier recall${activeRecalls > 1 ? "s" : ""}`);
+  }
+  if (riskSignals) {
+    stars -= 0.5;
+    reasons.push("food-safety complaints reported");
+  }
+  stars = Math.max(1, Math.round(stars * 2) / 2);
+  return { stars, reason: reasons.join(" · "), level: stars >= 4 ? "good" : stars >= 3 ? "ok" : "poor" };
+}

@@ -43,8 +43,12 @@ export function Subtitle({ children }: { children: React.ReactNode }) {
 export function Body({ children, muted, style }: { children: React.ReactNode; muted?: boolean; style?: object }) {
   return <Text style={[styles.body, muted && { color: colors.muted }, style]}>{children}</Text>;
 }
-export function Small({ children, style }: { children: React.ReactNode; style?: object }) {
-  return <Text style={[styles.small, style]}>{children}</Text>;
+export function Small({ children, style, numberOfLines }: { children: React.ReactNode; style?: object; numberOfLines?: number }) {
+  return (
+    <Text style={[styles.small, style]} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
 }
 
 export function Button({

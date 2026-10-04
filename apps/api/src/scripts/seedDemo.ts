@@ -69,6 +69,31 @@ await prisma.restaurantProfile.upsert({
   update: {},
 });
 
+// Neighbours on the map around Capitol Deli (lower Manhattan), as open-data discovery would create them.
+const neighbours = [
+  { name: "Harbor Oyster Bar", address: "12 Stone St", lat: 40.7041, lng: -74.0119, grade: "A", score: 7, insp: "2026-09-12" },
+  { name: "Fulton Street Pizza", address: "88 Fulton St", lat: 40.7095, lng: -74.0063, grade: "B", score: 21, insp: "2026-08-28" },
+  { name: "Wall St Ramen", address: "40 Wall St", lat: 40.7065, lng: -74.0092, grade: "C", score: 34, insp: "2026-09-30" },
+  { name: "Trinity Place Cafe", address: "100 Trinity Pl", lat: 40.7086, lng: -74.0128, grade: "A", score: 11, insp: "2026-07-19" },
+  { name: "Battery Park Tacos", address: "17 Battery Pl", lat: 40.7049, lng: -74.0164, grade: null, score: null, insp: null },
+  { name: "Pearl Street Noodles", address: "54 Pearl St", lat: 40.7034, lng: -74.0103, grade: "Z", score: 19, insp: "2026-09-25" },
+];
+for (const n of neighbours) {
+  const p = await prisma.restaurantProfile.upsert({
+    where: { key: `name:${n.name.toLowerCase().replace(/[^a-z0-9 ]/g, "")}|manhattan|NY` },
+    create: { key: `name:${n.name.toLowerCase().replace(/[^a-z0-9 ]/g, "")}|manhattan|NY`, name: n.name, city: "Manhattan", state: "NY", address: n.address, latitude: n.lat, longitude: n.lng, gradeSource: n.grade ? "nyc_dohmh" : null, gradeExternalId: n.grade ? `5${Math.round(n.lat * 1e4)}` : null, currentGrade: n.grade, currentScore: n.score, gradeScale: n.grade ? "nyc_points" : null, lastInspectedAt: n.insp ? new Date(n.insp) : null, gradeCheckedAt: new Date() },
+    update: { address: n.address, latitude: n.lat, longitude: n.lng, currentGrade: n.grade, currentScore: n.score, gradeScale: n.grade ? "nyc_points" : null, lastInspectedAt: n.insp ? new Date(n.insp) : null },
+  });
+  if (n.insp) {
+    await prisma.restaurantInspection.upsert({
+      where: { profileId_source_inspectedAt: { profileId: p.id, source: "nyc_dohmh", inspectedAt: new Date(n.insp) } },
+      create: { profileId: p.id, source: "nyc_dohmh", inspectedAt: new Date(n.insp), grade: n.grade, score: n.score, inspectionType: "Cycle Inspection / Initial Inspection", violations: n.grade === "C" ? [{ code: "04L", description: "Evidence of mice or live mice present in facility's food and/or non-food areas.", critical: true }] : [], sourceUrl: null },
+      update: {},
+    });
+  }
+}
+await prisma.restaurantProfile.update({ where: { id: profile.id }, data: { address: "100 Broadway" } });
+
 await prisma.connector.create({ data: { userId: user.id, provider: "instacart", displayName: "My Instacart", mcpUrl: "https://mcp.instacart.example.com/mcp", lastSyncAt: new Date(Date.now() - 3 * 86_400_000), lastSyncStatus: "ok" } });
 
 // Make the inbox look lived-in: one read, one resolved.

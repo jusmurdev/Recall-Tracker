@@ -109,6 +109,21 @@ export default function HomeScreen() {
           </Pressable>
         ) : null}
 
+        <Pressable onPress={() => router.push("/map")} accessibilityRole="button">
+          <Card>
+            <View style={styles.heroRow}>
+              <View style={[styles.iconBubble, { backgroundColor: colors.successSoft }]}>
+                <Ionicons name="map" size={20} color={colors.success} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Body style={{ fontWeight: "700" }}>Eating out? See what's safe nearby</Body>
+                <Small>Health grades and a safety rating for restaurants around you</Small>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </View>
+          </Card>
+        </Pressable>
+
         <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
           <Card>
             <View style={styles.heroRow}>

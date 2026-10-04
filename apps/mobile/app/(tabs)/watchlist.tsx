@@ -44,9 +44,14 @@ export default function WatchlistScreen() {
               <ActionTile icon="add-circle" title="Add a brand" subtitle="Or a product you buy" onPress={() => router.push("/watch/new")} />
               <ActionTile icon="layers" title="Follow a category" subtitle="e.g. all baby food" onPress={() => router.push("/watch/subscribe")} tone="soft" />
             </View>
+            <Pressable onPress={() => router.push("/map")} accessibilityRole="button" style={styles.restaurantCta}>
+              <Ionicons name="map" size={20} color={colors.success} />
+              <Text style={styles.restaurantText}>Restaurants near you, with safety ratings</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </Pressable>
             <Pressable onPress={() => router.push(premium ? "/watch/restaurant" : "/premium")} accessibilityRole="button" style={styles.restaurantCta}>
               <Ionicons name="restaurant" size={20} color={colors.premium} />
-              <Text style={styles.restaurantText}>Track a restaurant's health grade</Text>
+              <Text style={styles.restaurantText}>Track a restaurant by name</Text>
               <PremiumTag />
             </Pressable>
           </View>

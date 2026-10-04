@@ -10,6 +10,7 @@ import { alertRoutes } from "./routes/alerts.js";
 import { authRoutes } from "./routes/auth.js";
 import { premiumRoutes } from "./routes/premium.js";
 import { recallRoutes } from "./routes/recalls.js";
+import { restaurantRoutes } from "./routes/restaurants.js";
 import { scanRoutes } from "./routes/scan.js";
 import { watchlistRoutes } from "./routes/watchlist.js";
 
@@ -45,6 +46,7 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
   await app.register(alertRoutes);
   await app.register(scanRoutes);
   await app.register(premiumRoutes);
+  await app.register(restaurantRoutes);
   await app.register(adminRoutes);
 
   return app;
