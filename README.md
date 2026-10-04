@@ -43,6 +43,9 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   16Z" → Kroger creamy peanut butter), checked against recalls, and can be watched in one
   tap. Receipts are saved and re-checked against new recalls whenever reopened.
 - Alert inbox with "why you got this" explanations and confidence.
+- Dietary profile: allergies (the big nine plus your own), gluten-free, halal and kosher. Alerts
+  when a recall mentions what you avoid, a heads-up on scanned labels and receipts, a "For my
+  diet" filter. Deterministic and free; honest about limits (`docs/diet-profiles.md`).
 - Location-aware ranking: the phone resolves its state on-device and sends only that, so
   recalls sold where you live or currently are rank higher and the feed has a "Near me" filter.
 - Category subscriptions: "every Class I food recall sold in my state" with no product list.

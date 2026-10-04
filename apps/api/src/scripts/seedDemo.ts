@@ -9,11 +9,34 @@ import { randomToken, sha256 } from "../lib/crypto.js";
 import { findRecallsForItem, recordAlertsForItem } from "../matching/engine.js";
 
 const token = process.env.DEMO_TOKEN ?? randomToken();
+const demoUser = { tokenHash: sha256(token), tier: "premium" as const, homeState: "CA", lastKnownState: "NY", timezone: "America/Los_Angeles", quietHoursStart: 22, quietHoursEnd: 7, dietProfiles: ["allergy_peanut", "allergy_milk", "gluten_free", "halal", "kosher"], otherAllergens: ["mustard"] };
 const user = await prisma.user.upsert({
   where: { installId: "demo-install" },
-  create: { installId: "demo-install", tokenHash: sha256(token), tier: "premium", homeState: "CA", lastKnownState: "NY", timezone: "America/Los_Angeles", quietHoursStart: 22, quietHoursEnd: 7 },
-  update: { tokenHash: sha256(token), tier: "premium", homeState: "CA", lastKnownState: "NY", timezone: "America/Los_Angeles", quietHoursStart: 22, quietHoursEnd: 7 },
+  create: { installId: "demo-install", ...demoUser },
+  update: demoUser,
 });
+
+// Recalls that exercise every dietary profile (undeclared milk, undeclared peanuts, wheat/gluten,
+// pork gelatin, alcohol, a kosher-certified product). Deterministic ids so re-seeding is idempotent.
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000);
+const dietRecalls = [
+  { sourceId: "DEMO-DIET-MILK", company: "Harvest Lane Bakery", product: "Harvest Lane Oatmeal Raisin Cookies, 10 oz tray", reason: "Undeclared milk. The cookies contain whey protein that is not listed on the label; people with a milk allergy risk a serious reaction.", category: "food" as const, severity: "critical" as const, states: ["US"], days: 2, code: "Best by 11/2026 through 01/2027; lot 24A-24K", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+  { sourceId: "DEMO-DIET-PEANUT", company: "Sierra Trail Co.", product: "Sierra Trail Dark Chocolate Granola Bars, 6 count box", reason: "Undeclared peanuts. A supplier shipped peanut pieces labeled as sunflower seeds; peanut was not declared on the package.", category: "food" as const, severity: "critical" as const, states: ["CA", "NV", "AZ", "OR", "WA"], days: 4, code: "UPC 0 71234 55512 9; best by dates 03/15/2027 and 03/22/2027", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+  { sourceId: "DEMO-DIET-GLUTEN", company: "Northfield Pasta Works", product: "Northfield Gluten-Free Penne, 12 oz bag", reason: "Mislabeled: bags marked gluten-free were filled with semolina (wheat) penne. People with celiac disease or a wheat allergy should not eat it.", category: "food" as const, severity: "high" as const, states: ["US"], days: 6, code: "Lot NF2261 and NF2262, best by 09/2027", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+  { sourceId: "DEMO-DIET-GELATIN", company: "Bright Bite Confections", product: "Bright Bite Fruit Chews, 8 oz bag (made with pork gelatin)", reason: "Undeclared pork-derived gelatin; the ingredient statement lists gelatin without its source. Also undeclared yellow 5.", category: "food" as const, severity: "low" as const, states: ["US"], days: 9, code: "Lots BB-0911 through BB-0930", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+  { sourceId: "DEMO-DIET-ALCOHOL", company: "Vineyard Kitchen LLC", product: "Vineyard Kitchen Red Wine Marinara Sauce, 24 oz jar", reason: "Product contains alcohol (red wine) that is not declared on the front label, and may have been sold as alcohol-free.", category: "food" as const, severity: "low" as const, states: ["NY", "NJ", "CT", "PA"], days: 12, code: "Jars coded 26-2201 to 26-2240", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+  { sourceId: "DEMO-DIET-KOSHER", company: "Shalom Foods Inc.", product: "Shalom Foods Orthodox Union (OU-D) Certified Chocolate Rugelach, 12 oz", reason: "Undeclared almonds (tree nuts). Product is kosher-certified by the Orthodox Union; the almond ingredient was omitted from the label.", category: "food" as const, severity: "high" as const, states: ["NY", "NJ", "FL", "CA", "IL"], days: 14, code: "Sell by 10/30/2026 and 11/06/2026", url: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts" },
+];
+for (const r of dietRecalls) {
+  const data = {
+    source: "FDA" as const, sourceId: r.sourceId, title: `${r.company}: ${r.product}`, summary: `${r.reason} Distribution: ${r.states.includes("US") ? "Nationwide" : r.states.join(", ")}.`,
+    productDescription: r.product, reason: r.reason, category: r.category, severity: r.severity, status: "ongoing" as const, company: r.company, brands: [r.company.split(" ").slice(0, 2).join(" ")],
+    upcs: [] as string[], distributionStates: r.states, recallDate: daysAgo(r.days + 1), publishedAt: daysAgo(r.days), url: r.url, imageUrls: [] as string[], codeInfo: r.code,
+    remedy: "Check the codes on your package. If they match, do not eat the product; return it to the store for a refund or throw it away. Contact the company with questions.",
+    contentHash: `demo-${r.sourceId.toLowerCase()}`, raw: {},
+  };
+  await prisma.recall.upsert({ where: { source_sourceId: { source: "FDA", sourceId: r.sourceId } }, create: data, update: data });
+}
 await prisma.alert.deleteMany({ where: { userId: user.id } });
 await prisma.watchItem.deleteMany({ where: { userId: user.id } });
 await prisma.restaurantNotice.deleteMany({ where: { userId: user.id } });
@@ -96,10 +119,14 @@ await prisma.restaurantProfile.update({ where: { id: profile.id }, data: { addre
 
 await prisma.connector.create({ data: { userId: user.id, provider: "instacart", displayName: "My Instacart", mcpUrl: "https://mcp.instacart.example.com/mcp", lastSyncAt: new Date(Date.now() - 3 * 86_400_000), lastSyncStatus: "ok" } });
 
+// Diet alerts: what the profile above matches among recent recalls (no push: the user is looking).
+const { backfillDietAlerts } = await import("../diet/alerts.js");
+const dietAlerts = await backfillDietAlerts(user);
+
 // Make the inbox look lived-in: one read, one resolved.
 const alerts = await prisma.alert.findMany({ where: { userId: user.id }, orderBy: { score: "desc" } });
 if (alerts[1]) await prisma.alert.update({ where: { id: alerts[1].id }, data: { readAt: new Date() } });
 if (alerts[2]) await prisma.alert.update({ where: { id: alerts[2].id }, data: { readAt: new Date(), resolvedAt: new Date(), resolvedAction: "returned" } });
 
-console.log(JSON.stringify({ userId: user.id, token, watchItems: items.length + 1, alerts: alerts.length, restaurantWatchItemId: restaurant.id }, null, 2));
+console.log(JSON.stringify({ userId: user.id, token, watchItems: items.length + 1, alerts: alerts.length, dietAlerts, restaurantWatchItemId: restaurant.id }, null, 2));
 await prisma.$disconnect();

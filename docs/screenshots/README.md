@@ -17,6 +17,13 @@ shows a radar-style preview instead of Apple/Google Maps.
 | ![](13-connectors.png) Connected accounts | ![](14-settings.png) You | ![](15-map.png) Restaurants near you |
 | ![](16-restaurant-public.png) Restaurant page | | |
 
+### Dietary profiles
+
+| | | |
+| --- | --- | --- |
+| ![](20-home-diet-lead.png) Home leads with diet matches | ![](21-settings-diet.png) Diet and allergies | ![](22-browse-for-my-diet.png) "For my diet" filter |
+| ![](23-alert-diet-detail.png) Diet alert with the matched phrase | ![](24-about-diet-alerts.png) About diet alerts | ![](25-scan-diet-heads-up.png) Heads up on a scanned label |
+
 ## Regenerate
 
 ```bash
@@ -35,4 +42,5 @@ node scripts/serve-web-export.mjs dist     # port 8080
 node scripts/screenshots.mjs ../../docs/screenshots
 node scripts/screenshots-scan.mjs ../../docs/screenshots   # drives the product + receipt scan flows
 node scripts/screenshots-map.mjs ../../docs/screenshots    # map + public restaurant page (mock location)
+node scripts/screenshots-diet.mjs ../../docs/screenshots   # dietary profile screens
 ```
