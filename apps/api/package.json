@@ -1,0 +1,45 @@
+{
+  "name": "@recall/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/worker.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "ingest:once": "tsx src/scripts/ingestOnce.ts",
+    "ingest:fixtures": "tsx src/scripts/ingestOnce.ts --fixtures",
+    "seed:demo": "tsx src/scripts/seedDemo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/swagger": "^9.9.1",
+    "@fastify/swagger-ui": "^6.1.1",
+    "@prisma/client": "^6.19.3",
+    "@recall/shared": "*",
+    "bullmq": "^5.30.0",
+    "expo-server-sdk": "^7.2.0",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
+    "ioredis": "^5.4.1",
+    "pino": "^10.4.0",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "prisma": "^6.19.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

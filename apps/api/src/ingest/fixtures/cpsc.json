@@ -1,0 +1,43 @@
+[
+  {
+    "RecallID": 9981,
+    "RecallNumber": "27-001",
+    "RecallDate": "2026-10-01T00:00:00",
+    "Description": "This recall involves Stanley Switchback and Trigger Action travel mugs. The lid threads can shrink when exposed to heat and torque, causing the lid to detach during use and posing a burn hazard.",
+    "URL": "https://www.cpsc.gov/Recalls/2027/Stanley-Recalls-Travel-Mugs",
+    "Title": "Stanley Recalls Switchback and Trigger Action Travel Mugs Due to Burn Hazard",
+    "ConsumerContact": "Stanley toll-free at 866-555-0100",
+    "LastPublishDate": "2026-10-01T08:00:00",
+    "Products": [
+      { "Name": "Stanley Switchback 12 oz travel mug", "Description": "Stainless steel insulated travel mug", "Model": "20-01437, 20-02211", "Type": "Travel mugs", "NumberOfUnits": "About 2.6 million" }
+    ],
+    "Images": [{ "URL": "https://www.cpsc.gov/s3fs-public/stanley-mug.jpg" }],
+    "Injuries": [{ "Name": "The firm has received 91 reports of lids detaching during use, including 38 burn injuries." }],
+    "Manufacturers": [{ "Name": "Pacific Market International (Stanley)", "CompanyID": "12345" }],
+    "ManufacturerCountries": [{ "Country": "China" }],
+    "ProductUPCs": [{ "UPC": "041604302046" }, { "UPC": "0 41604 30221 1" }],
+    "Hazards": [{ "Name": "Burn", "HazardTypeID": "4" }],
+    "Remedies": [{ "Name": "Replace" }],
+    "Retailers": [{ "Name": "Amazon.com" }, { "Name": "Target" }, { "Name": "Dick's Sporting Goods" }],
+    "Distributors": [],
+    "Importers": [],
+    "SoldAtLabel": "Sold At"
+  },
+  {
+    "RecallID": 9982,
+    "RecallNumber": "27-004",
+    "RecallDate": "2026-09-29T00:00:00",
+    "Description": "The blender's blade assembly can detach while in use, posing a laceration hazard.",
+    "URL": "https://www.cpsc.gov/Recalls/2027/Blendo-Recalls-Personal-Blenders",
+    "Title": "Blendo Recalls Personal Blenders Due to Laceration Hazard",
+    "LastPublishDate": "2026-09-29T08:00:00",
+    "Products": [{ "Name": "Blendo Go 20 oz personal blender", "Model": "BG-20" }],
+    "Images": [],
+    "Injuries": [],
+    "Manufacturers": [{ "Name": "Blendo Appliances LLC" }],
+    "ProductUPCs": [],
+    "Hazards": [{ "Name": "Laceration" }],
+    "Remedies": [{ "Name": "Refund" }],
+    "Retailers": [{ "Name": "Walmart" }]
+  }
+]

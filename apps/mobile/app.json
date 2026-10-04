@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Recall Tracker",
+    "slug": "recall-tracker",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "recalltracker",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.jusmur.recalltracker",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan product labels and barcodes to check them against recalls.",
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "dev.jusmur.recalltracker",
+      "permissions": ["CAMERA", "POST_NOTIFICATIONS"],
+      "adaptiveIcon": { "backgroundColor": "#0B1F2A" }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Allow Recall Tracker to scan product labels and barcodes." }],
+      ["expo-notifications", { "color": "#D64545", "defaultChannel": "recalls" }],
+      ["expo-splash-screen", { "backgroundColor": "#0B1F2A", "resizeMode": "contain" }]
+    ],
+    "experiments": { "typedRoutes": true },
+    "extra": {
+      "apiBaseUrl": "http://localhost:4000",
+      "eas": { "projectId": "" }
+    }
+  }
+}

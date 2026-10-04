@@ -1,0 +1,254 @@
+// Recall Tracker — database schema.
+// One shared Postgres holds every recall pulled from the public sources; clients
+// never call FDA/USDA/CPSC directly. Users, devices, watchlists and alerts hang off it.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm, unaccent]
+}
+
+enum RecallSource {
+  FDA
+  FSIS
+  CPSC
+}
+
+enum RecallCategory {
+  food
+  meat_poultry
+  dietary_supplement
+  cosmetic
+  drug
+  medical_device
+  veterinary
+  consumer_product
+  other
+}
+
+enum RecallSeverity {
+  critical
+  high
+  low
+  unknown
+}
+
+enum RecallStatus {
+  ongoing
+  completed
+  terminated
+  pending
+  unknown
+}
+
+model Recall {
+  id                 String         @id @default(cuid())
+  source             RecallSource
+  sourceId           String
+  title              String
+  summary            String
+  productDescription String
+  reason             String
+  category           RecallCategory
+  severity           RecallSeverity
+  status             RecallStatus
+  company            String
+  brands             String[]
+  upcs               String[]
+  distributionStates String[]
+  recallDate         DateTime?
+  publishedAt        DateTime
+  sourceUpdatedAt    DateTime?
+  url                String?
+  imageUrls          String[]
+  /// sha256 of the normalised payload; lets ingestion skip untouched records.
+  contentHash        String
+  /// Original source payload for audit/debug and future re-normalisation.
+  raw                Json
+  /// Generated tsvector maintained by trigger (see migration); Prisma treats it as Unsupported.
+  searchVector       Unsupported("tsvector")?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  alerts Alert[]
+
+  @@unique([source, sourceId])
+  @@index([publishedAt(sort: Desc)])
+  @@index([category, publishedAt(sort: Desc)])
+  @@index([severity, publishedAt(sort: Desc)])
+  @@index([upcs], type: Gin)
+  @@index([distributionStates], type: Gin)
+  @@index([searchVector], type: Gin)
+}
+
+/// Per-source sync watermark + run history.
+model SourceSyncState {
+  source        RecallSource @id
+  /// Last successfully ingested source-side date (inclusive window start for next run).
+  watermark     DateTime?
+  lastRunAt     DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  consecutiveFailures Int @default(0)
+}
+
+model IngestRun {
+  id          String       @id @default(cuid())
+  source      RecallSource
+  startedAt   DateTime     @default(now())
+  finishedAt  DateTime?
+  ok          Boolean?
+  fetched     Int          @default(0)
+  inserted    Int          @default(0)
+  updated     Int          @default(0)
+  unchanged   Int          @default(0)
+  alertsCreated Int        @default(0)
+  error       String?
+
+  @@index([source, startedAt(sort: Desc)])
+}
+
+enum UserTier {
+  free
+  premium
+}
+
+model User {
+  id               String    @id @default(cuid())
+  installId        String    @unique
+  /// sha256 of the bearer token; the raw token lives only on the device.
+  tokenHash        String    @unique
+  tier             UserTier  @default(free)
+  premiumExpiresAt DateTime?
+  /// Store-side subscription id (RevenueCat / App Store / Play) for entitlement sync.
+  subscriptionRef  String?
+  homeState        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  devices    Device[]
+  watchItems WatchItem[]
+  alerts     Alert[]
+  connectors Connector[]
+  aiUsage    AiUsage[]
+}
+
+model Device {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expoPushToken String   @unique
+  platform      String
+  enabled       Boolean  @default(true)
+  /// Set when Expo reports DeviceNotRegistered; we stop sending to it.
+  invalidatedAt DateTime?
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum WatchItemKind {
+  product
+  upc
+  scan
+  restaurant
+}
+
+model WatchItem {
+  id                String        @id @default(cuid())
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind              WatchItemKind
+  label             String
+  terms             String[]
+  upc               String?
+  context           String?
+  ocrText           String?
+  categories        RecallCategory[] @default([])
+  restaurantName    String?
+  restaurantCity    String?
+  restaurantState   String?
+  restaurantWebsite String?
+  importedFrom      String?
+  /// Restaurant research output (premium): supplier/brand terms merged into `terms`.
+  researchSummary   String?
+  researchUpdatedAt DateTime?
+  researchJson      Json?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  alerts Alert[]
+
+  @@index([userId])
+  @@index([upc])
+  @@index([kind])
+}
+
+enum MatchReason {
+  upc_exact
+  brand_match
+  text_match
+  scan_text_match
+  restaurant_supplier
+  category_subscription
+}
+
+model Alert {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recallId    String
+  recall      Recall      @relation(fields: [recallId], references: [id], onDelete: Cascade)
+  watchItemId String?
+  watchItem   WatchItem?  @relation(fields: [watchItemId], references: [id], onDelete: SetNull)
+  reason      MatchReason
+  score       Float
+  explanation String
+  createdAt   DateTime    @default(now())
+  readAt      DateTime?
+  pushedAt    DateTime?
+  pushTicket  String?
+
+  @@unique([userId, recallId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([pushedAt])
+}
+
+/// Remote MCP server connected by a premium user (grocery/delivery/shopping data).
+model Connector {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String
+  displayName    String
+  mcpUrl         String
+  /// AES-256-GCM encrypted token (see lib/crypto.ts). Null when the server needs no auth.
+  tokenCiphertext String?
+  lastSyncAt     DateTime?
+  lastSyncStatus String    @default("never")
+  lastSyncError  String?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId])
+}
+
+/// Token/cost accounting for premium AI calls, per user, for quotas and billing insight.
+model AiUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature      String
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  cacheReadTokens Int   @default(0)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+}

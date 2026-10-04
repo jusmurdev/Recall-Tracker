@@ -1,0 +1,22 @@
+{
+  "name": "recall-tracker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "US recall tracker: shared ingestion backend + mobile app with watchlist alerts, OCR/barcode scanning, and premium AI features",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @recall/shared && npm run build -w @recall/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "dev:api": "npm run dev -w @recall/api",
+    "dev:worker": "npm run dev:worker -w @recall/api",
+    "dev:mobile": "npm run start -w @recall/mobile"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

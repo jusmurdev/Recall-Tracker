@@ -1,0 +1,25 @@
+{
+  "meta": { "results": { "skip": 0, "limit": 100, "total": 1 } },
+  "results": [
+    {
+      "status": "Ongoing",
+      "city": "Bridgewater",
+      "state": "NJ",
+      "country": "United States",
+      "classification": "Class II",
+      "openfda": {},
+      "product_type": "Drugs",
+      "event_id": "97101",
+      "recalling_firm": "Northstar Generics Inc.",
+      "voluntary_mandated": "Voluntary: Firm initiated",
+      "distribution_pattern": "Nationwide",
+      "recall_number": "D-0211-2026",
+      "product_description": "Metformin Hydrochloride Extended-Release Tablets USP, 500 mg, 100-count bottle, NDC 16714-0621-01",
+      "reason_for_recall": "CGMP deviations: N-nitrosodimethylamine (NDMA) impurity above acceptable intake limit.",
+      "recall_initiation_date": "20260925",
+      "center_classification_date": "20261001",
+      "report_date": "20261002",
+      "code_info": "Lots NG2401A, NG2402A exp 03/2027"
+    }
+  ]
+}
