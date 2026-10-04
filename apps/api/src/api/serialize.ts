@@ -25,7 +25,9 @@ export function serializeRecall(r: DbRecall): Recall {
   };
 }
 
-export function serializeWatchItem(w: DbWatchItem): WatchItem {
+type WatchItemWithProfile = DbWatchItem & { restaurantProfile?: { latitude: number | null; longitude: number | null } | null };
+
+export function serializeWatchItem(w: WatchItemWithProfile): WatchItem {
   return {
     id: w.id,
     userId: w.userId,
@@ -42,6 +44,8 @@ export function serializeWatchItem(w: DbWatchItem): WatchItem {
           city: w.restaurantCity ?? undefined,
           state: w.restaurantState ?? undefined,
           website: w.restaurantWebsite ?? undefined,
+          latitude: w.restaurantProfile?.latitude ?? undefined,
+          longitude: w.restaurantProfile?.longitude ?? undefined,
         }
       : undefined,
     createdAt: w.createdAt.toISOString(),

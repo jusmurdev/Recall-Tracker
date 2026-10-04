@@ -40,6 +40,8 @@ export interface RestaurantIdentity {
   city?: string | null;
   state?: string | null;
   website?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 /**
@@ -82,13 +84,14 @@ export async function getOrCreateProfile(r: RestaurantIdentity): Promise<Restaur
   const key = restaurantKey(r);
   return prisma.restaurantProfile.upsert({
     where: { key },
-    create: { key, name: r.name, city: r.city ?? null, state: r.state?.toUpperCase() ?? null, website: r.website ?? null },
+    create: { key, name: r.name, city: r.city ?? null, state: r.state?.toUpperCase() ?? null, website: r.website ?? null, latitude: r.latitude ?? null, longitude: r.longitude ?? null },
     update: {
       lastRequestedAt: new Date(),
       // Fill in details we did not have before; never overwrite known ones with blanks.
       ...(r.city ? { city: r.city } : {}),
       ...(r.state ? { state: r.state.toUpperCase() } : {}),
       ...(r.website ? { website: r.website } : {}),
+      ...(typeof r.latitude === "number" && typeof r.longitude === "number" ? { latitude: r.latitude, longitude: r.longitude } : {}),
     },
   });
 }

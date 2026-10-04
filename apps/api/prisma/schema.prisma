@@ -127,7 +127,11 @@ model User {
   premiumExpiresAt DateTime?
   /// Store-side subscription id (RevenueCat / App Store / Play) for entitlement sync.
   subscriptionRef  String?
+  /// Where the user lives (set explicitly or auto-detected once). Used to rank recalls.
   homeState        String?
+  /// Most recent state the phone reported (travel). Only the state is stored, never coordinates.
+  lastKnownState   String?
+  lastLocationAt   DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -211,6 +215,9 @@ model RestaurantProfile {
   city            String?
   state           String?
   website         String?
+  /// Coordinates of the venue (a public place), used for "near me" lookups and geofence alerts.
+  latitude        Float?
+  longitude       Float?
   researchStatus  ResearchStatus @default(pending)
   summary         String?
   /// Confirmed/likely supplier + brand terms, already filtered of generic words.

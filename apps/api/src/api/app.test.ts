@@ -192,6 +192,47 @@ describe("HTTP API (integration)", () => {
     expect(await prisma.restaurantProfile.count()).toBe(2);
   });
 
+  it("accepts a coarse location, uses it for ranking, and finds tracked restaurants nearby", async () => {
+    // First report with no home state set becomes home; later reports only move lastKnownState.
+    await prisma.user.update({ where: { id: userId }, data: { homeState: null, lastKnownState: null, tier: "premium" } });
+    const first = await app.inject({ method: "PUT", url: "/v1/me/location", headers: auth(), payload: { state: "ca" } });
+    expect(first.json()).toMatchObject({ homeState: "CA", lastKnownState: "CA" });
+    const travel = await app.inject({ method: "PUT", url: "/v1/me/location", headers: auth(), payload: { state: "NV" } });
+    expect(travel.json()).toMatchObject({ homeState: "CA", lastKnownState: "NV" });
+    expect((await app.inject({ method: "PUT", url: "/v1/me/location", headers: auth(), payload: { state: "California" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: "/v1/me", headers: auth() })).json()).toMatchObject({ homeState: "CA", lastKnownState: "NV" });
+
+    // The juice recall was distributed in AZ/CA/NV/OR: a user at home in CA but currently in NV is not down-ranked.
+    const juice = await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "product", label: "Green juice", terms: ["green juice"] } });
+    expect(juice.json().matches[0].explanation).not.toContain("Not reported as distributed");
+    await prisma.user.update({ where: { id: userId }, data: { homeState: "NY", lastKnownState: "FL" } });
+    const away = await app.inject({ method: "GET", url: `/v1/watchlist/${juice.json().item.id}/matches`, headers: auth() });
+    expect(away.json().matches[0].explanation).toContain("Not reported as distributed in NY or FL");
+
+    // Restaurant with coordinates → profile stores them → nearby finds it, with supplier recall count.
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/watchlist",
+      headers: auth(),
+      payload: { kind: "restaurant", label: "Deli", terms: [], restaurant: { name: "Capitol Deli", city: "Richmond", state: "VA", latitude: 37.5407, longitude: -77.436 } },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().item.restaurant).toMatchObject({ latitude: 37.5407, longitude: -77.436 });
+    await prisma.restaurantProfile.update({
+      where: { id: created.json().research.profileId },
+      data: { researchStatus: "ready", researchedAt: new Date(), summary: "Deli", supplierTerms: ["boar's head"], researchJson: { summary: "Deli", suppliers: [], riskSignals: [], sources: [] } },
+    });
+    const near = await app.inject({ method: "GET", url: "/v1/premium/restaurants/nearby?lat=37.55&lng=-77.44&radiusKm=3", headers: auth() });
+    expect(near.statusCode).toBe(200);
+    expect(near.json().items).toHaveLength(1);
+    expect(near.json().items[0]).toMatchObject({ name: "Capitol Deli", trackedBy: 1, activeRecalls: 1, watchItemId: created.json().item.id });
+    expect(near.json().items[0].distanceKm).toBeLessThan(2);
+    const far = await app.inject({ method: "GET", url: "/v1/premium/restaurants/nearby?lat=38.9&lng=-77.03&radiusKm=5", headers: auth() });
+    expect(far.json().items).toHaveLength(0);
+    const list = await app.inject({ method: "GET", url: "/v1/watchlist", headers: auth() });
+    expect(list.json().items.find((w: { id: string }) => w.id === created.json().item.id).restaurant.latitude).toBe(37.5407);
+  });
+
   it("flips tiers from the entitlement webhook", async () => {
     process.env.REVENUECAT_WEBHOOK_SECRET = "whsec";
     const res = await app.inject({

@@ -29,6 +29,8 @@ export function escapeLike(s: string): string {
 
 type WatchItemLite = Pick<WatchItem, "id" | "userId" | "kind" | "label" | "terms" | "upc" | "categories"> & {
   homeState: string | null;
+  /** Where the phone last reported being (travel); treated like a second home state. */
+  lastKnownState?: string | null;
 };
 
 /**
@@ -80,10 +82,12 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     return null;
   }
 
-  // Down-rank recalls not distributed in the user's state (never suppress: labels lie, people travel).
-  if (item.homeState && recall.distributionStates.length && !recall.distributionStates.includes("US") && !recall.distributionStates.includes(item.homeState)) {
+  // Down-rank recalls not distributed where the user lives or currently is (never suppress:
+  // distribution lists are incomplete and people travel).
+  const userStates = [item.homeState, item.lastKnownState].filter((s): s is string => !!s);
+  if (userStates.length && recall.distributionStates.length && !recall.distributionStates.includes("US") && !userStates.some((s) => recall.distributionStates.includes(s))) {
     score *= 0.6;
-    explanation += ` Not reported as distributed in ${item.homeState}.`;
+    explanation += ` Not reported as distributed in ${userStates.join(" or ")}.`;
   }
   // Severity nudges push-worthiness.
   if (recall.severity === "critical") score = Math.min(1, score + 0.1);
@@ -101,6 +105,7 @@ interface CandidateRow {
   upc: string | null;
   categories: WatchItem["categories"];
   homeState: string | null;
+  lastKnownState: string | null;
   matched_terms: string[];
   upc_hit: boolean;
 }
@@ -124,7 +129,7 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
              OR ${plain} LIKE '%' || regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g') || '%'
              OR (length(t) >= 4 AND word_similarity(lower(t), ${text}) >= ${FUZZY_THRESHOLD})`;
     const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
-      SELECT wi.id, wi."userId", wi.kind, wi.label, wi.terms, wi.upc, wi.categories, u."homeState",
+      SELECT wi.id, wi."userId", wi.kind, wi.label, wi.terms, wi.upc, wi.categories, u."homeState", u."lastKnownState",
         ARRAY(
           SELECT t FROM unnest(wi.terms) AS t
           WHERE length(regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g')) >= 2 AND (${termMatches})

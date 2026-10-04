@@ -41,6 +41,13 @@ export default function WatchItemDetail() {
           {item.upc ? <Body>Barcode {item.upc}</Body> : null}
           {item.terms.length ? <Body>{item.terms.join(" · ")}</Body> : null}
           {item.context ? <Body muted>Context: {item.context}</Body> : null}
+          {item.restaurant?.latitude != null && item.restaurant.longitude != null ? (
+            <Body muted>
+              Pinned location · arrival alerts {`(${item.restaurant.latitude.toFixed(3)}, ${item.restaurant.longitude.toFixed(3)})`}
+            </Body>
+          ) : item.kind === "restaurant" ? (
+            <Body muted>No location pinned, so arrival alerts are off for this restaurant.</Body>
+          ) : null}
           {item.categories.length ? <Body muted>Categories: {item.categories.join(", ")}</Body> : null}
           <Body muted>Added {new Date(item.createdAt).toLocaleDateString()}{item.importedFrom ? ` · imported from ${item.importedFrom}` : ""}</Body>
         </Card>

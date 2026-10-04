@@ -6,7 +6,10 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ensureSession } from "@/api/client";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
+import { useGeofenceSync } from "@/hooks/useGeofenceSync";
 import { colors } from "@/lib/theme";
+// Registers the background geofence task at bundle load (required by iOS).
+import "@/lib/geofence";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
 
@@ -18,6 +21,7 @@ function Boot({ children }: { children: React.ReactNode }) {
       .finally(() => setReady(true));
   }, []);
   usePushRegistration();
+  useGeofenceSync(ready);
   return ready ? <>{children}</> : null;
 }
 

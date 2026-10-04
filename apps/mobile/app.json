@@ -4,33 +4,56 @@
     "slug": "recall-tracker",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "recalltracker",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.jusmur.recalltracker",
+      "buildNumber": "1",
+      "usesAppleSignIn": false,
+      "config": { "usesNonExemptEncryption": false },
       "infoPlist": {
         "NSCameraUsageDescription": "Scan product labels and barcodes to check them against recalls.",
-        "UIBackgroundModes": ["remote-notification"]
-      }
+        "NSLocationWhenInUseUsageDescription": "Your location is used to show recalls sold in your state and to find tracked restaurants near you. Only your state is sent to our servers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow 'Always' to get a heads-up when you arrive at a restaurant whose suppliers have an active recall. Only your state is sent to our servers.",
+        "NSPhotoLibraryUsageDescription": "Choose an existing photo of a label to check it against recalls.",
+        "UIBackgroundModes": ["remote-notification", "location"],
+        "CFBundleAllowMixedLocalizations": true
+      },
+      "entitlements": { "aps-environment": "production" },
+      "associatedDomains": []
     },
     "android": {
       "package": "dev.jusmur.recalltracker",
-      "permissions": ["CAMERA", "POST_NOTIFICATIONS"],
-      "adaptiveIcon": { "backgroundColor": "#0B1F2A" }
+      "versionCode": 1,
+      "permissions": ["CAMERA", "POST_NOTIFICATIONS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "ACCESS_BACKGROUND_LOCATION"],
+      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#0B1F2A" }
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-task-manager",
       ["expo-camera", { "cameraPermission": "Allow Recall Tracker to scan product labels and barcodes." }],
       ["expo-notifications", { "color": "#D64545", "defaultChannel": "recalls" }],
-      ["expo-splash-screen", { "backgroundColor": "#0B1F2A", "resizeMode": "contain" }]
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Your location is used to show recalls sold in your state and to find tracked restaurants near you. Only your state is sent to our servers.",
+          "locationAlwaysAndWhenInUsePermission": "Allow 'Always' to get a heads-up when you arrive at a restaurant whose suppliers have an active recall.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
+        }
+      ],
+      ["expo-splash-screen", { "image": "./assets/splash-icon.png", "imageWidth": 200, "backgroundColor": "#0B1F2A", "resizeMode": "contain" }]
     ],
     "experiments": { "typedRoutes": true },
     "extra": {
       "apiBaseUrl": "http://localhost:4000",
       "eas": { "projectId": "" }
-    }
+    },
+    "runtimeVersion": { "policy": "appVersion" },
+    "updates": { "url": "" }
   }
 }

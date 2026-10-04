@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { AnonymousAuthRequest, RegisterDeviceRequest } from "@recall/shared";
+import { AnonymousAuthRequest, RegisterDeviceRequest, UpdateLocationRequest } from "@recall/shared";
 import { prisma } from "../../db/client.js";
 import { randomToken, sha256 } from "../../lib/crypto.js";
 import { requireUser, isPremium } from "../plugins/auth.js";
@@ -28,6 +28,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       id: user.id,
       tier: premium ? "premium" : "free",
       homeState: user.homeState,
+      lastKnownState: user.lastKnownState,
       premium: {
         tier: premium ? "premium" : "free",
         features: { connectors: premium, restaurants: premium, aiScan: premium },
@@ -35,6 +36,20 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       },
       createdAt: user.createdAt.toISOString(),
     };
+  });
+
+  /**
+   * Coarse location from the phone. The app reverse-geocodes on-device and sends only the
+   * two-letter state; we never receive coordinates. Used to rank alerts and filter the feed.
+   */
+  app.put("/v1/me/location", async (req) => {
+    const user = requireUser(req);
+    const body = UpdateLocationRequest.parse(req.body);
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { lastKnownState: body.state, lastLocationAt: new Date(), ...(body.setHome || !user.homeState ? { homeState: body.state } : {}) },
+    });
+    return { homeState: updated.homeState, lastKnownState: updated.lastKnownState, lastLocationAt: updated.lastLocationAt?.toISOString() ?? null };
   });
 
   app.post("/v1/devices", async (req, reply) => {

@@ -102,6 +102,17 @@ export const AuthResponse = z.object({
 });
 export type AuthResponse = z.infer<typeof AuthResponse>;
 
+/**
+ * Coarse location report from the phone. We deliberately accept only a state (resolved
+ * on-device by reverse geocoding), never coordinates, so the server cannot track users.
+ */
+export const UpdateLocationRequest = z.object({
+  state: z.string().length(2).toUpperCase(),
+  /** When true, also set this as the user's home state (first-run auto-detect or explicit choice). */
+  setHome: z.boolean().default(false),
+});
+export type UpdateLocationRequest = z.infer<typeof UpdateLocationRequest>;
+
 export const RegisterDeviceRequest = z.object({
   expoPushToken: z.string().regex(/^Expo(nent)?PushToken\[.+\]$/, "Must be an Expo push token"),
   platform: z.enum(["ios", "android", "web"]),
@@ -142,6 +153,9 @@ export const CreateWatchItemRequest = z.object({
       city: z.string().trim().max(80).optional(),
       state: z.string().length(2).toUpperCase().optional(),
       website: z.string().url().optional(),
+      /** Venue coordinates (from the phone's location or a map pick). Enables geofence alerts. */
+      latitude: z.number().min(-90).max(90).optional(),
+      longitude: z.number().min(-180).max(180).optional(),
     })
     .optional(),
   categories: z.array(RecallCategory).max(9).default([]),
@@ -290,6 +304,25 @@ export const RestaurantResearch = z.object({
     })
     .nullable(),
 });
+
+/** A known restaurant near the user, with whether its suppliers currently have recalls. */
+export const NearbyRestaurant = z.object({
+  profileId: z.string(),
+  name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  latitude: z.number(),
+  longitude: z.number(),
+  distanceKm: z.number(),
+  trackedBy: z.number().int(),
+  researchStatus: z.enum(["pending", "researching", "ready", "failed"]),
+  summary: z.string().nullable(),
+  /** Recalls in the last 180 days matching this restaurant's suppliers. */
+  activeRecalls: z.number().int(),
+  /** Whether the current user already tracks it (and the watch item id). */
+  watchItemId: z.string().nullable(),
+});
+export type NearbyRestaurant = z.infer<typeof NearbyRestaurant>;
 
 export const RestaurantLookup = z.object({
   known: z.boolean(),

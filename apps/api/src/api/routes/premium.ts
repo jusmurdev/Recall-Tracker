@@ -8,6 +8,8 @@ import { enqueueResearch } from "../../jobs/queues.js";
 import { importPurchases } from "../../premium/purchaseImport.js";
 import { PremiumUnavailableError, QuotaExceededError } from "../../premium/claude.js";
 import { canRefresh, isFresh, restaurantKey } from "../../premium/restaurantResearch.js";
+import { findRecallsForItem } from "../../matching/engine.js";
+import { Prisma } from "@prisma/client";
 import { HttpProblem, requirePremium } from "../plugins/auth.js";
 import { serializeConnector, serializeRecall, serializeWatchItem } from "../serialize.js";
 
@@ -94,6 +96,66 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  /**
+   * Known restaurants near a point, with whether their suppliers currently have recalls.
+   * Powers "what's around me" and the geofence list. Coordinates come from the phone and are
+   * used for this query only; they are not stored.
+   */
+  app.get("/v1/premium/restaurants/nearby", async (req) => {
+    const user = requirePremium(req);
+    const q = z
+      .object({
+        lat: z.coerce.number().min(-90).max(90),
+        lng: z.coerce.number().min(-180).max(180),
+        radiusKm: z.coerce.number().min(0.1).max(50).default(5),
+        limit: z.coerce.number().int().min(1).max(50).default(20),
+      })
+      .parse(req.query);
+    // Haversine over the indexed bounding box; fine for the volumes a city produces.
+    const latDelta = q.radiusKm / 111;
+    const lngDelta = q.radiusKm / (111 * Math.max(0.2, Math.cos((q.lat * Math.PI) / 180)));
+    const rows = await prisma.$queryRaw<Array<{ id: string; distance_km: number }>>(Prisma.sql`
+      SELECT id,
+        6371 * acos(least(1, cos(radians(${q.lat})) * cos(radians(latitude)) * cos(radians(longitude) - radians(${q.lng})) + sin(radians(${q.lat})) * sin(radians(latitude)))) AS distance_km
+      FROM "RestaurantProfile"
+      WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+        AND latitude BETWEEN ${q.lat - latDelta} AND ${q.lat + latDelta}
+        AND longitude BETWEEN ${q.lng - lngDelta} AND ${q.lng + lngDelta}
+      ORDER BY distance_km ASC
+      LIMIT ${q.limit * 2}
+    `);
+    const within = rows.filter((r) => r.distance_km <= q.radiusKm).slice(0, q.limit);
+    if (!within.length) return { items: [] };
+    const profiles = await prisma.restaurantProfile.findMany({
+      where: { id: { in: within.map((r) => r.id) } },
+      include: { _count: { select: { watchItems: true } }, watchItems: { where: { userId: user.id }, select: { id: true } } },
+    });
+    const byId = new Map(profiles.map((p) => [p.id, p]));
+    const items = [];
+    for (const r of within) {
+      const p = byId.get(r.id);
+      if (!p) continue;
+      const active = p.supplierTerms.length
+        ? (await findRecallsForItem({ id: p.id, userId: user.id, kind: "restaurant", label: p.name, terms: p.supplierTerms, upc: null, categories: [], homeState: null }, { limit: 50 })).length
+        : 0;
+      items.push({
+        profileId: p.id,
+        name: p.name,
+        city: p.city,
+        state: p.state,
+        latitude: p.latitude!,
+        longitude: p.longitude!,
+        distanceKm: Math.round(r.distance_km * 100) / 100,
+        trackedBy: p._count.watchItems,
+        researchStatus: p.researchStatus,
+        summary: p.researchStatus === "ready" ? p.summary : null,
+        activeRecalls: active,
+        watchItemId: p.watchItems[0]?.id ?? null,
+      });
+    }
+    return { items };
+  });
+
   /** Restaurant research for one of the user's watch items (served from the shared profile). */
   app.get("/v1/premium/restaurants/:id", async (req) => {
     const user = requirePremium(req);
@@ -115,6 +177,7 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
       researchedAt: (profile?.researchedAt ?? item.researchUpdatedAt)?.toISOString() ?? null,
       status: ready ? "ready" : profile?.researchStatus === "failed" ? "failed" : "pending",
       error: profile?.researchStatus === "failed" ? profile.researchError : null,
+      location: profile?.latitude != null && profile.longitude != null ? { latitude: profile.latitude, longitude: profile.longitude } : null,
       shared: profile ? { profileId: profile.id, trackedBy: profile._count.watchItems, researchCount: profile.researchCount, cacheHits: profile.cacheHits, fresh: isFresh(profile), canRefresh: canRefresh(profile) } : null,
     };
   });

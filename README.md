@@ -39,6 +39,8 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 - Scan: barcode via the camera, label text via on-device OCR (ML Kit), with optional context
   ("bought at Costco", "for my toddler"). Only text leaves the phone.
 - Alert inbox with "why you got this" explanations and confidence.
+- Location-aware ranking: the phone resolves its state on-device and sends only that, so
+  recalls sold where you live or currently are rank higher and the feed has a "Near me" filter.
 
 **Premium**
 - **Connected accounts (MCP).** Users connect grocery / delivery / shopping accounts that
@@ -51,6 +53,9 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   per person and is refreshed only when stale.
 - **AI label identification.** When OCR fails (curved bottles, glare), the photo is identified
   by Claude vision and matched.
+- **Arrival alerts.** Tracked restaurants are pinned to coordinates; iOS/Android geofences
+  give a heads-up when you walk into one whose suppliers have an active recall, and a "near
+  me" lookup shows restaurants other users already track around you.
 
 See [docs/PREMIUM.md](docs/PREMIUM.md).
 
@@ -79,16 +84,24 @@ npm run dev:mobile     # Expo dev server
 Environment variables are documented in `apps/api/.env.example`. The whole stack also runs
 with `docker compose up` (api, worker, postgres, redis).
 
-### Mobile
+### Mobile (iPhone first)
 
-The app is an Expo Router project. Barcode scanning works in Expo Go; OCR uses
-`@react-native-ml-kit/text-recognition`, which needs a development build:
+The app is an Expo Router project configured for iOS builds out of the box: bundle id,
+Info.plist purpose strings for camera, location (when-in-use and always) and photos,
+background modes for remote notifications and location, push entitlement, encryption
+export declaration, placeholder icons, and EAS build profiles in `apps/mobile/eas.json`.
 
 ```bash
 cd apps/mobile
-npx expo prebuild
-npx expo run:ios   # or run:android
+npx expo prebuild                       # generates ios/ and android/
+npx expo run:ios                        # local simulator build (needs Xcode)
+eas build --profile device --platform ios   # development build on a real iPhone
+eas build --profile production --platform ios && eas submit -p ios
 ```
+
+Barcode scanning works in Expo Go, but OCR (ML Kit), geofencing and push tokens need a
+development build. Before shipping, replace the generated `assets/*.png` with real artwork,
+set `extra.eas.projectId`, `updates.url` and the `submit.production.ios` fields.
 
 Set the API URL with `EXPO_PUBLIC_API_URL=https://your-api` or `extra.apiBaseUrl` in
 `app.json`. Push notifications go through Expo's push service; add your EAS `projectId`
@@ -112,8 +125,11 @@ matching, alerts and every HTTP route. No network access is needed.
   user's state. Alerts below 0.5 are kept in the inbox but not pushed.
 - **Idempotent ingestion**: each run re-fetches a 3-day overlap window, hashes the normalised
   record, and only re-alerts on new recalls or escalations (severity up, re-opened).
-- **Privacy**: OCR runs on-device; only extracted text is sent. Connector tokens are encrypted
-  at rest (AES-256-GCM). Anonymous device auth; no email required.
+- **Privacy**: OCR runs on-device; only extracted text is sent. Location is reverse-geocoded
+  on-device and only the two-letter state reaches the server; restaurant coordinates are
+  stored (they are public places) but user coordinates never are, and geofence checks run on
+  the phone. Connector tokens are encrypted at rest (AES-256-GCM). Anonymous device auth; no
+  email required.
 - **Cost control**: per-user daily AI quota, token accounting per feature, low effort for
   simple vision calls.
 

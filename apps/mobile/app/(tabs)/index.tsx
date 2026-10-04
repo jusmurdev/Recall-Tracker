@@ -4,6 +4,7 @@ import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from "re
 import { CATEGORY_LABEL, type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { Empty, Input, Loading, Pill, RecallRow, Screen } from "@/components/ui";
 import { useRecallFeed, useStats } from "@/hooks/queries";
+import { useLocationState } from "@/hooks/useLocationState";
 import { colors, spacing } from "@/lib/theme";
 
 const CATEGORIES: Array<RecallCategory | "all"> = ["all", "food", "meat_poultry", "dietary_supplement", "veterinary", "cosmetic", "drug", "medical_device", "consumer_product"];
@@ -13,10 +14,18 @@ export default function RecallsScreen() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<RecallCategory | "all">("all");
   const [severity, setSeverity] = useState<RecallSeverity | "all">("all");
+  const [nearMe, setNearMe] = useState(false);
+  const loc = useLocationState();
+  const stateFilter = nearMe ? (loc.state ?? undefined) : undefined;
   const query = useMemo(
-    () => ({ q: q.trim() || undefined, category: category === "all" ? undefined : category, severity: severity === "all" ? undefined : severity }),
-    [q, category, severity],
+    () => ({ q: q.trim() || undefined, category: category === "all" ? undefined : category, severity: severity === "all" ? undefined : severity, state: stateFilter }),
+    [q, category, severity, stateFilter],
   );
+  const toggleNearMe = async () => {
+    if (nearMe) return setNearMe(false);
+    const p = loc.place ?? (await loc.refresh({ ask: true }));
+    if (p?.state) setNearMe(true);
+  };
   const feed = useRecallFeed(query);
   const stats = useStats();
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
@@ -46,6 +55,7 @@ export default function RecallsScreen() {
               ))}
             </ScrollView>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Pill label={nearMe && loc.state ? `Sold in ${loc.state}` : loc.busy ? "Locating…" : "Near me"} active={nearMe} onPress={() => void toggleNearMe()} />
               {SEVERITIES.map((s) => (
                 <Pill key={s} label={s === "all" ? "Any severity" : s[0]!.toUpperCase() + s.slice(1)} active={severity === s} onPress={() => setSeverity(s)} />
               ))}

@@ -81,6 +81,27 @@ keyed by profile so concurrent requests collapse into a single AI run, and manua
 are throttled by `RESTAURANT_RESEARCH_MIN_REFRESH_DAYS`. Each watch item keeps a snapshot
 of the research it was given. See docs/PREMIUM.md for the full flow.
 
+## Location
+
+Location is a phone-side capability with a deliberately thin server footprint:
+
+- **State detection** (`apps/mobile/src/lib/location.ts`, `hooks/useLocationState.ts`):
+  `expo-location` + on-device reverse geocoding (Apple's geocoder on iOS, no API key)
+  produce a two-letter state. `PUT /v1/me/location` stores it as `lastKnownState`, and as
+  `homeState` on first run or when the user taps "Set as home". The server never receives
+  coordinates.
+- **Ranking + feed**: `scoreMatch` treats home and last-known state as "the user's states"
+  and down-ranks (never hides) recalls distributed elsewhere. The feed's `state` filter powers
+  the "Near me" pill.
+- **Restaurant venues**: `RestaurantProfile.latitude/longitude` (public places) come from the
+  phone when the user adds a restaurant on site, from an on-device forward geocode of the typed
+  address, or from a nearby pick. `GET /v1/premium/restaurants/nearby` runs a haversine query
+  and reports active supplier recalls per venue.
+- **Arrival alerts** (`apps/mobile/src/lib/geofence.ts`): `expo-task-manager` +
+  `Location.startGeofencingAsync` monitor up to 20 tracked restaurants (the iOS cap). On
+  enter, the task fetches that restaurant's current supplier recalls and posts a local
+  notification if any exist. Requires "Always" permission on iOS; toggled in Settings.
+
 ## Notifications (`notifications/push.ts`)
 
 Expo push in chunks of 100, tickets stored on the alert, `DeviceNotRegistered` disables the

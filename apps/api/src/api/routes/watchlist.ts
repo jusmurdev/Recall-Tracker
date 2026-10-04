@@ -12,7 +12,11 @@ const FREE_WATCH_LIMIT = 50;
 export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/watchlist", async (req) => {
     const user = requireUser(req);
-    const items = await prisma.watchItem.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
+    const items = await prisma.watchItem.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      include: { restaurantProfile: { select: { latitude: true, longitude: true } } },
+    });
     return { items: items.map(serializeWatchItem) };
   });
 
@@ -48,7 +52,7 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
         restaurantWebsite: body.restaurant?.website,
       },
     });
-    const lite = { ...item, homeState: user.homeState };
+    const lite = { ...item, homeState: user.homeState, lastKnownState: user.lastKnownState };
     let matches = body.kind === "restaurant" ? [] : await findRecallsForItem(lite);
     let research: { status: "cached" | "queued" | "unavailable"; profileId: string; researchedAt: string | null } | null = null;
     if (body.kind === "restaurant" && body.restaurant) {
@@ -65,7 +69,9 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
     } else {
       await recordAlertsForItem(lite, matches);
     }
-    const fresh = body.kind === "restaurant" ? await prisma.watchItem.findUniqueOrThrow({ where: { id: item.id } }) : item;
+    const fresh = body.kind === "restaurant"
+      ? await prisma.watchItem.findUniqueOrThrow({ where: { id: item.id }, include: { restaurantProfile: { select: { latitude: true, longitude: true } } } })
+      : item;
     return reply.status(201).send({
       item: serializeWatchItem(fresh),
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
@@ -79,7 +85,7 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const item = await prisma.watchItem.findFirst({ where: { id, userId: user.id } });
     if (!item) throw new HttpProblem(404, "not_found", "Watch item not found");
-    const matches = await findRecallsForItem({ ...item, homeState: user.homeState }, { lookbackDays: 365 });
+    const matches = await findRecallsForItem({ ...item, homeState: user.homeState, lastKnownState: user.lastKnownState }, { lookbackDays: 365 });
     return { matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })) };
   });
 

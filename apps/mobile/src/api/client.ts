@@ -8,11 +8,13 @@ import type {
   ImportPurchasesResponse,
   Recall,
   RecallListQuery,
+  NearbyRestaurant,
   RegisterDeviceRequest,
   RestaurantLookup,
   ScanMatch,
   ScanMatchRequest,
   ScanMatchResponse,
+  UpdateLocationRequest,
   WatchItem,
 } from "@recall/shared";
 import { apiBaseUrl } from "@/lib/config";
@@ -83,6 +85,7 @@ export interface Me {
   id: string;
   tier: "free" | "premium";
   homeState: string | null;
+  lastKnownState: string | null;
   premium: { tier: "free" | "premium"; features: { connectors: boolean; restaurants: boolean; aiScan: boolean }; expiresAt: string | null };
 }
 
@@ -96,6 +99,8 @@ export interface Stats {
 export const api = {
   me: () => request<Me>("/v1/me"),
   registerDevice: (body: RegisterDeviceRequest) => request<{ id: string }>("/v1/devices", { method: "POST", body: JSON.stringify(body) }),
+  updateLocation: (body: UpdateLocationRequest) =>
+    request<{ homeState: string | null; lastKnownState: string | null; lastLocationAt: string | null }>("/v1/me/location", { method: "PUT", body: JSON.stringify(body) }),
 
   recalls: (q: Partial<RecallListQuery>) => request<{ items: Recall[]; nextCursor: string | null }>(`/v1/recalls?${qs(q)}`, { auth: false }),
   recall: (id: string) => request<Recall>(`/v1/recalls/${id}`, { auth: false }),
@@ -135,8 +140,10 @@ export const api = {
       researchedAt: string | null;
       status: "ready" | "pending" | "failed";
       error: string | null;
+      location: { latitude: number; longitude: number } | null;
       shared: { profileId: string; trackedBy: number; researchCount: number; cacheHits: number; fresh: boolean; canRefresh: boolean } | null;
     }>(`/v1/premium/restaurants/${id}`),
   restaurantLookup: (q: { name: string; city?: string; state?: string; website?: string }) => request<RestaurantLookup>(`/v1/premium/restaurants/lookup?${qs(q)}`),
+  restaurantsNearby: (q: { lat: number; lng: number; radiusKm?: number }) => request<{ items: NearbyRestaurant[] }>(`/v1/premium/restaurants/nearby?${qs(q)}`),
   refreshRestaurant: (id: string) => request<{ queued: boolean }>(`/v1/premium/restaurants/${id}/refresh`, { method: "POST" }),
 };
