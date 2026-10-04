@@ -20,7 +20,8 @@ screenshots. Do not fix app code unless a step is blocked; list bugs instead.
 
 Branch and setup differences from the generic prompt:
 
-- Clone and check out **`feature/diet-profiles-and-fixes`** (not `private/app`).
+- Clone and check out **`feature/diet-profiles-and-fixes`** (not `private/app`). The branch is on
+  GitHub; `git fetch origin feature/diet-profiles-and-fixes` if the clone did not bring it.
 - Two new migrations must apply: `20261006000000_gtin14` and `20261006030000_diet_profiles`.
   `npm run prisma:migrate -w @recall/api` on a fresh database must print no errors.
 - The seed now creates seven diet demo recalls and gives the demo user a diet profile. After
@@ -51,12 +52,21 @@ Run these with `curl` against `http://localhost:4000` and record PASS/FAIL with 
 
 ## Phase B: phone tour (Codex, agent mode, screenshots to `.work/shots/`, notes to `.work/tour.md`)
 
-Use the demo token for premium screens by signing the phone in as the demo user: after first
-launch, run `UPDATE "User" SET "tokenHash" = (SELECT "tokenHash" FROM "User" WHERE "installId"='demo-install') ...` is NOT possible (token hashes are unique). Instead make the phone's own
-anonymous user premium and give it a profile with SQL:
-`UPDATE "User" SET tier='premium', "dietProfiles"=ARRAY['allergy_peanut','allergy_milk','gluten_free','halal','kosher','vegan'], "otherAllergens"=ARRAY['mustard'] WHERE "installId" LIKE 'android-%';`
-then pull to refresh Home. Alerts backfill when the profile is saved from the app, so after the
-SQL also toggle one allergy off and on in Settings to trigger the backfill.
+The phone signs in as its own anonymous user. Give that user premium and a diet profile with one
+SQL statement against the local database, then pull to refresh Home:
+
+```sql
+UPDATE "User"
+SET tier = 'premium',
+    "dietProfiles" = ARRAY['allergy_peanut','allergy_milk','gluten_free','halal','kosher','vegan'],
+    "otherAllergens" = ARRAY['mustard']
+WHERE "installId" LIKE 'android-%';
+```
+
+Alerts are backfilled only when the profile is saved from the app, so after the SQL toggle one
+allergy chip off and on in Settings; that triggers the backfill. The demo user created by the
+seed (token `demo-token-for-screenshots`) is for API checks only; its token cannot be loaded onto
+the phone.
 
 For every stop: screenshot, one line of what was expected and what was seen, PASS/FAIL. On every
 screenshot also check: no button under the system navigation bar, every button has a border and
@@ -82,7 +92,7 @@ even spacing, no clipped or mid-word-wrapped text, US spelling.
 | B16 | Premium screen (free user) | reads "Billed through Google Play" |
 | B17 | Recall detail → Show details → Barcodes | 12-digit UPC, not 14 digits with leading zeros |
 | B18 | You tab → "Diet and allergies" | nine allergen chips, an "Another allergen" box with Add, switches for Gluten-free, Halal diet, Kosher, Vegan; "About diet alerts" link opens the info screen |
-| B19 | Tap Peanuts, Milk, Gluten-free, Halal diet, Kosher, Vegan; add "mustard" | each save sticks after pull-to-refresh; a note appears saying N recalls from the last few weeks match |
+| B19 | Tap Peanuts off and on again, then add "lupin" as another allergen | each save sticks after pull-to-refresh; a note appears saying N recalls from the last few weeks match; "lupin" shows as a removable chip |
 | B20 | Home | the alert card leads with "N recalls match your …" and diet matches are listed first |
 | B21 | Alerts tab | diet alerts show "Undeclared allergen · matters for your peanut allergy" style notes |
 | B22 | Open the peanut diet alert | a card named "Peanut allergy" shows "Undeclared · "peanuts"", the explanation, and the phrase highlighted in the notice excerpt; "About diet alerts" button present |
@@ -90,7 +100,7 @@ even spacing, no clipped or mid-word-wrapped text, US spelling.
 | B24 | Scan, type `Zappo Crunch Bar` then a second line `INGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR` | "Looks fine" plus a "Heads up for your diet" card listing milk, halal, kosher, vegan and mustard lines |
 | B25 | Scan a real product label in the kitchen with milk or soy in the ingredients | heads-up card appears on the result; note OCR latency |
 | B26 | Scan a real receipt | lines with milk, eggs, etc. carry small diet tags |
-| B27 | You tab → turn every diet switch and chip off | Browse "For my diet" chip now opens Settings instead of filtering; Home no longer leads with diet |
+| B27 | You tab → turn every diet switch and chip off, remove "mustard" and "lupin" | Browse "For my diet" chip now opens Settings instead of filtering; Home no longer leads with diet; existing diet alerts stay in the inbox as history |
 | B28 | Kill and relaunch the app | Home renders from cache immediately |
 
 ## Phase C: tests (Codex)
