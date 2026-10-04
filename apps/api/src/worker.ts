@@ -9,7 +9,7 @@ import { ingestSource } from "./ingest/run.js";
 import { closeQueues, QUEUE_INGEST, QUEUE_PUSH, QUEUE_RECEIPTS, QUEUE_RESEARCH, redis, scheduleIngestion, type IngestJob, type PushJob, type ReceiptsJob, type ResearchJob } from "./jobs/queues.js";
 import { logger } from "./lib/logger.js";
 import { checkReceipts, sendPushForAlerts } from "./notifications/push.js";
-import { researchRestaurant } from "./premium/restaurantResearch.js";
+import { researchProfile } from "./premium/restaurantResearch.js";
 
 async function main(): Promise<void> {
   env();
@@ -23,11 +23,12 @@ async function main(): Promise<void> {
     new Worker<ResearchJob>(
       QUEUE_RESEARCH,
       async (job) => {
-        const item = await prisma.watchItem.findUnique({ where: { id: job.data.watchItemId } });
-        if (!item || item.kind !== "restaurant") return;
-        const user = await prisma.user.findUnique({ where: { id: item.userId } });
+        // Shared profile: one research run serves every user tracking this restaurant.
+        const profile = await prisma.restaurantProfile.findUnique({ where: { id: job.data.profileId }, include: { _count: { select: { watchItems: true } } } });
+        if (!profile || profile._count.watchItems === 0) return;
+        const user = await prisma.user.findUnique({ where: { id: job.data.userId } });
         if (!user || user.tier !== "premium") return;
-        await researchRestaurant(item);
+        await researchProfile(profile.id, user.id);
       },
       { connection, concurrency: 2 },
     ),

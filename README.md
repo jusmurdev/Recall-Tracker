@@ -46,7 +46,9 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   connector and turns it into watch items. The server never parses retailer formats.
 - **Restaurant tracking.** Claude with server-side web search researches who supplies a
   restaurant's kitchen and recent food-safety signals; supplier names become watch terms, so
-  a Boar's Head recall alerts everyone tracking a deli that serves it.
+  a Boar's Head recall alerts everyone tracking a deli that serves it. Research is stored
+  once per restaurant and shared by every user who tracks it, so it runs once rather than
+  per person and is refreshed only when stale.
 - **AI label identification.** When OCR fails (curved bottles, glare), the photo is identified
   by Claude vision and matched.
 

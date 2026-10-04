@@ -3,6 +3,7 @@ import { CreateWatchItemRequest } from "@recall/shared";
 import { prisma } from "../../db/client.js";
 import { enqueueResearch } from "../../jobs/queues.js";
 import { findRecallsForItem, recordAlertsForItem } from "../../matching/engine.js";
+import { attachRestaurant } from "../../premium/restaurantResearch.js";
 import { HttpProblem, isPremium, requireUser } from "../plugins/auth.js";
 import { serializeRecall, serializeWatchItem } from "../serialize.js";
 
@@ -48,13 +49,28 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
       },
     });
     const lite = { ...item, homeState: user.homeState };
-    const matches = body.kind === "restaurant" ? [] : await findRecallsForItem(lite);
-    await recordAlertsForItem(lite, matches);
-    if (body.kind === "restaurant") await enqueueResearch({ watchItemId: item.id, userId: user.id });
+    let matches = body.kind === "restaurant" ? [] : await findRecallsForItem(lite);
+    let research: { status: "cached" | "queued" | "unavailable"; profileId: string; researchedAt: string | null } | null = null;
+    if (body.kind === "restaurant" && body.restaurant) {
+      // Research is shared: if someone already researched this restaurant recently, reuse it
+      // right now and skip the AI entirely. Otherwise queue one research job for the profile.
+      const attached = await attachRestaurant(item, body.restaurant);
+      matches = attached.matches;
+      let status: "cached" | "queued" | "unavailable" = "cached";
+      if (!attached.cached) {
+        const queued = attached.profile.researchStatus === "researching" || (await enqueueResearch({ profileId: attached.profile.id, userId: user.id }));
+        status = queued ? "queued" : "unavailable";
+      }
+      research = { status, profileId: attached.profile.id, researchedAt: attached.profile.researchedAt?.toISOString() ?? null };
+    } else {
+      await recordAlertsForItem(lite, matches);
+    }
+    const fresh = body.kind === "restaurant" ? await prisma.watchItem.findUniqueOrThrow({ where: { id: item.id } }) : item;
     return reply.status(201).send({
-      item: serializeWatchItem(item),
+      item: serializeWatchItem(fresh),
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
-      researchQueued: body.kind === "restaurant",
+      researchQueued: research?.status === "queued",
+      research,
     });
   });
 

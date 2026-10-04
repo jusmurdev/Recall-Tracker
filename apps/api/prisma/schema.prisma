@@ -176,7 +176,10 @@ model WatchItem {
   restaurantState   String?
   restaurantWebsite String?
   importedFrom      String?
-  /// Restaurant research output (premium): supplier/brand terms merged into `terms`.
+  /// Shared research record for restaurant items (one per restaurant, reused across users).
+  restaurantProfileId String?
+  restaurantProfile   RestaurantProfile? @relation(fields: [restaurantProfileId], references: [id], onDelete: SetNull)
+  /// Snapshot of the research applied to this item (summary shown in the app; terms merged into `terms`).
   researchSummary   String?
   researchUpdatedAt DateTime?
   researchJson      Json?
@@ -188,6 +191,44 @@ model WatchItem {
   @@index([userId])
   @@index([upc])
   @@index([kind])
+  @@index([restaurantProfileId])
+}
+
+enum ResearchStatus {
+  pending
+  researching
+  ready
+  failed
+}
+
+/// One row per real-world restaurant. Research (suppliers, risk signals, sources) is done
+/// once and shared by every user tracking that restaurant until it goes stale.
+model RestaurantProfile {
+  id              String         @id @default(cuid())
+  /// Normalised identity: website host when known, else "name|city|state" (see restaurantKey()).
+  key             String         @unique
+  name            String
+  city            String?
+  state           String?
+  website         String?
+  researchStatus  ResearchStatus @default(pending)
+  summary         String?
+  /// Confirmed/likely supplier + brand terms, already filtered of generic words.
+  supplierTerms   String[]
+  researchJson    Json?
+  researchedAt    DateTime?
+  researchError   String?
+  /// How many times the AI research actually ran (cost visibility).
+  researchCount   Int            @default(0)
+  /// How many watch items reused the cache instead of triggering research.
+  cacheHits       Int            @default(0)
+  lastRequestedAt DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  watchItems WatchItem[]
+
+  @@index([researchStatus, researchedAt])
 }
 
 enum MatchReason {

@@ -67,10 +67,25 @@ export default function WatchItemDetail() {
                   <Body muted>No food-safety complaints or inspection problems found.</Body>
                 )}
                 {research.data.sources.length ? <Body muted>{research.data.sources.length} sources · researched {new Date(research.data.researchedAt!).toLocaleDateString()}</Body> : null}
-                <Button title="Re-run research" variant="ghost" onPress={() => void api.refreshRestaurant(id).then(() => research.refetch())} />
+                {research.data.shared ? (
+                  <Body muted>
+                    Shared research: {research.data.shared.trackedBy} {research.data.shared.trackedBy === 1 ? "person tracks" : "people track"} this restaurant · researched{" "}
+                    {research.data.shared.researchCount}× · reused {research.data.shared.cacheHits}×
+                  </Body>
+                ) : null}
+                {research.data.shared?.canRefresh ? (
+                  <Button title="Re-run research" variant="ghost" onPress={() => void api.refreshRestaurant(id).then(() => research.refetch())} />
+                ) : (
+                  <Body muted style={{ fontSize: 12 }}>Research is refreshed automatically once it is a week old.</Body>
+                )}
+              </>
+            ) : research.data?.status === "failed" ? (
+              <>
+                <Body style={{ color: colors.critical }}>Research failed{research.data.error ? `: ${research.data.error}` : "."}</Body>
+                <Button title="Try again" variant="ghost" onPress={() => void api.refreshRestaurant(id).then(() => research.refetch())} />
               </>
             ) : (
-              <Body muted>Researching this restaurant's suppliers and reviews. This usually takes a minute or two.</Body>
+              <Body muted>Researching this restaurant's suppliers and reviews. This usually takes a minute or two and is shared with everyone else who tracks it.</Body>
             )}
           </Card>
         ) : null}

@@ -16,7 +16,9 @@ export interface PushJob {
   alertIds: string[];
 }
 export interface ResearchJob {
-  watchItemId: string;
+  /** Shared RestaurantProfile to research; every watch item linked to it is updated. */
+  profileId: string;
+  /** User whose request triggered the research (charged against their AI quota). */
   userId: string;
 }
 export interface ReceiptsJob {
@@ -62,8 +64,14 @@ export async function enqueuePushForAlerts(alertIds: string[]): Promise<void> {
   }
 }
 
-export async function enqueueResearch(job: ResearchJob): Promise<void> {
-  await researchQueue().add("research", job, { ...DEFAULT_OPTS, jobId: `research:${job.watchItemId}` });
+/**
+ * One job per profile at a time: the jobId dedupes concurrent requests from several users
+ * adding the same restaurant, so the AI research runs once.
+ */
+export async function enqueueResearch(job: ResearchJob): Promise<boolean> {
+  if (process.env.DISABLE_QUEUES === "1") return false;
+  await researchQueue().add("research", job, { ...DEFAULT_OPTS, jobId: `research:${job.profileId}` });
+  return true;
 }
 
 export async function enqueueReceipts(ticketIds: string[]): Promise<void> {

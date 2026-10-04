@@ -2,10 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { CreateConnectorRequest } from "@recall/shared";
 import { prisma } from "../../db/client.js";
+import { env } from "../../config/env.js";
 import { encryptSecret } from "../../lib/crypto.js";
 import { enqueueResearch } from "../../jobs/queues.js";
 import { importPurchases } from "../../premium/purchaseImport.js";
 import { PremiumUnavailableError, QuotaExceededError } from "../../premium/claude.js";
+import { canRefresh, isFresh, restaurantKey } from "../../premium/restaurantResearch.js";
 import { HttpProblem, requirePremium } from "../plugins/auth.js";
 import { serializeConnector, serializeRecall, serializeWatchItem } from "../serialize.js";
 
@@ -72,34 +74,72 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  /** Restaurant research status + manual refresh. */
-  app.get("/v1/premium/restaurants/:id", async (req) => {
-    const user = requirePremium(req);
-    const { id } = req.params as { id: string };
-    const item = await prisma.watchItem.findFirst({ where: { id, userId: user.id, kind: "restaurant" } });
-    if (!item) throw new HttpProblem(404, "not_found", "Restaurant not found");
-    const alerts = await prisma.alert.findMany({ where: { watchItemId: id }, include: { recall: true }, orderBy: { createdAt: "desc" }, take: 20 });
-    const research = (item.researchJson ?? null) as null | { suppliers?: unknown[]; riskSignals?: Array<{ signal: string; sourceUrl: string | null }>; sources?: string[] };
+  /**
+   * Is this restaurant already researched? Lets the app say "ready instantly" before the user
+   * commits, and shows how many others track it. Research is shared across all users.
+   */
+  app.get("/v1/premium/restaurants/lookup", async (req) => {
+    requirePremium(req);
+    const q = z.object({ name: z.string().trim().min(1), city: z.string().trim().optional(), state: z.string().trim().length(2).optional(), website: z.string().url().optional() }).parse(req.query);
+    const profile = await prisma.restaurantProfile.findUnique({ where: { key: restaurantKey(q) }, include: { _count: { select: { watchItems: true } } } });
+    if (!profile) return { known: false };
     return {
-      watchItemId: item.id,
-      restaurant: item.restaurantName ?? item.label,
-      summary: item.researchSummary ?? "",
-      supplierTerms: item.terms,
-      riskSignals: research?.riskSignals ?? [],
-      sources: research?.sources ?? [],
-      matchedRecalls: alerts.map((a) => ({ recall: serializeRecall(a.recall), reason: a.reason, score: a.score, explanation: a.explanation })),
-      researchedAt: item.researchUpdatedAt?.toISOString() ?? null,
-      status: item.researchUpdatedAt ? "ready" : "pending",
+      known: true,
+      profileId: profile.id,
+      status: profile.researchStatus,
+      fresh: isFresh(profile),
+      researchedAt: profile.researchedAt?.toISOString() ?? null,
+      trackedBy: profile._count.watchItems,
+      summary: isFresh(profile) ? profile.summary : null,
     };
   });
 
+  /** Restaurant research for one of the user's watch items (served from the shared profile). */
+  app.get("/v1/premium/restaurants/:id", async (req) => {
+    const user = requirePremium(req);
+    const { id } = req.params as { id: string };
+    const item = await prisma.watchItem.findFirst({ where: { id, userId: user.id, kind: "restaurant" }, include: { restaurantProfile: { include: { _count: { select: { watchItems: true } } } } } });
+    if (!item) throw new HttpProblem(404, "not_found", "Restaurant not found");
+    const profile = item.restaurantProfile;
+    const alerts = await prisma.alert.findMany({ where: { watchItemId: id }, include: { recall: true }, orderBy: { createdAt: "desc" }, take: 20 });
+    const research = (profile?.researchJson ?? item.researchJson ?? null) as null | { riskSignals?: Array<{ signal: string; sourceUrl: string | null }>; sources?: string[] };
+    const ready = profile ? profile.researchStatus === "ready" : !!item.researchUpdatedAt;
+    return {
+      watchItemId: item.id,
+      restaurant: profile?.name ?? item.restaurantName ?? item.label,
+      summary: profile?.summary ?? item.researchSummary ?? "",
+      supplierTerms: profile?.supplierTerms ?? item.terms,
+      riskSignals: research?.riskSignals ?? [],
+      sources: research?.sources ?? [],
+      matchedRecalls: alerts.map((a) => ({ recall: serializeRecall(a.recall), reason: a.reason, score: a.score, explanation: a.explanation })),
+      researchedAt: (profile?.researchedAt ?? item.researchUpdatedAt)?.toISOString() ?? null,
+      status: ready ? "ready" : profile?.researchStatus === "failed" ? "failed" : "pending",
+      error: profile?.researchStatus === "failed" ? profile.researchError : null,
+      shared: profile ? { profileId: profile.id, trackedBy: profile._count.watchItems, researchCount: profile.researchCount, cacheHits: profile.cacheHits, fresh: isFresh(profile), canRefresh: canRefresh(profile) } : null,
+    };
+  });
+
+  /**
+   * Manual refresh. Re-runs the AI only when the shared research is older than
+   * RESTAURANT_RESEARCH_MIN_REFRESH_DAYS, so one user cannot burn research for everyone.
+   */
   app.post("/v1/premium/restaurants/:id/refresh", async (req, reply) => {
     const user = requirePremium(req);
     const { id } = req.params as { id: string };
-    const item = await prisma.watchItem.findFirst({ where: { id, userId: user.id, kind: "restaurant" } });
+    const item = await prisma.watchItem.findFirst({ where: { id, userId: user.id, kind: "restaurant" }, include: { restaurantProfile: true } });
     if (!item) throw new HttpProblem(404, "not_found", "Restaurant not found");
-    await enqueueResearch({ watchItemId: id, userId: user.id });
-    return reply.status(202).send({ queued: true });
+    if (!item.restaurantProfile) throw new HttpProblem(409, "no_profile", "This item is not linked to a restaurant profile.");
+    const profile = item.restaurantProfile;
+    if (!canRefresh(profile)) {
+      return reply.status(200).send({
+        queued: false,
+        reason: profile.researchStatus === "researching" ? "already_researching" : "too_recent",
+        researchedAt: profile.researchedAt?.toISOString() ?? null,
+        nextRefreshAt: profile.researchedAt ? new Date(profile.researchedAt.getTime() + env().RESTAURANT_RESEARCH_MIN_REFRESH_DAYS * 86_400_000).toISOString() : null,
+      });
+    }
+    const queued = await enqueueResearch({ profileId: profile.id, userId: user.id });
+    return reply.status(queued ? 202 : 503).send({ queued, reason: queued ? null : "queue_unavailable" });
   });
 
   app.get("/v1/premium/usage", async (req) => {

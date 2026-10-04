@@ -71,6 +71,16 @@ UPC = 1.0; brand/company hit ≥ 0.75; description-only text ≥ 0.45; scaled by
 Best match per user wins; `(userId, recallId)` is unique so nobody is alerted twice.
 Alerts ≥ 0.5 are pushed; the rest just appear in the inbox.
 
+## Restaurant research cache (`premium/restaurantResearch.ts`)
+
+Research results live on `RestaurantProfile`, one row per real-world restaurant
+(normalised key from website host or name/city/state), not on the user's watch item. The
+first user to add a restaurant triggers one research job; everyone after that gets the
+stored result instantly until it is older than `RESTAURANT_RESEARCH_TTL_DAYS`. Job ids are
+keyed by profile so concurrent requests collapse into a single AI run, and manual refreshes
+are throttled by `RESTAURANT_RESEARCH_MIN_REFRESH_DAYS`. Each watch item keeps a snapshot
+of the research it was given. See docs/PREMIUM.md for the full flow.
+
 ## Notifications (`notifications/push.ts`)
 
 Expo push in chunks of 100, tickets stored on the alert, `DeviceNotRegistered` disables the

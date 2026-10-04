@@ -259,6 +259,10 @@ export const ImportPurchasesResponse = z.object({
 });
 export type ImportPurchasesResponse = z.infer<typeof ImportPurchasesResponse>;
 
+/**
+ * Research is done once per restaurant and shared by every user tracking it (see
+ * `shared`). It is refreshed only when stale, so most restaurant adds are instant and free.
+ */
 export const RestaurantResearch = z.object({
   watchItemId: z.string(),
   restaurant: z.string(),
@@ -269,8 +273,43 @@ export const RestaurantResearch = z.object({
   riskSignals: z.array(z.object({ signal: z.string(), sourceUrl: z.string().nullable() })),
   sources: z.array(z.string()),
   matchedRecalls: z.array(ScanMatch),
-  researchedAt: z.string().datetime(),
+  researchedAt: z.string().datetime().nullable(),
+  status: z.enum(["pending", "ready", "failed"]),
+  error: z.string().nullable(),
+  shared: z
+    .object({
+      profileId: z.string(),
+      /** Watch items (across all users) linked to this restaurant. */
+      trackedBy: z.number().int(),
+      /** How many times the AI research has actually run. */
+      researchCount: z.number().int(),
+      /** How many times a user got the cached result instead. */
+      cacheHits: z.number().int(),
+      fresh: z.boolean(),
+      canRefresh: z.boolean(),
+    })
+    .nullable(),
 });
+
+export const RestaurantLookup = z.object({
+  known: z.boolean(),
+  profileId: z.string().optional(),
+  status: z.enum(["pending", "researching", "ready", "failed"]).optional(),
+  fresh: z.boolean().optional(),
+  researchedAt: z.string().datetime().nullable().optional(),
+  trackedBy: z.number().int().optional(),
+  summary: z.string().nullable().optional(),
+});
+export type RestaurantLookup = z.infer<typeof RestaurantLookup>;
+
+export const CreateWatchItemResponse = z.object({
+  item: WatchItem,
+  matches: z.array(ScanMatch),
+  researchQueued: z.boolean(),
+  /** Present for restaurant items: whether cached research was reused or new research was queued. */
+  research: z.object({ status: z.enum(["cached", "queued", "unavailable"]), profileId: z.string(), researchedAt: z.string().datetime().nullable() }).nullable(),
+});
+export type CreateWatchItemResponse = z.infer<typeof CreateWatchItemResponse>;
 export type RestaurantResearch = z.infer<typeof RestaurantResearch>;
 
 export const PremiumStatus = z.object({

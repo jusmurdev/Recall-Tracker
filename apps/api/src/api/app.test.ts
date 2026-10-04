@@ -138,6 +138,60 @@ describe("HTTP API (integration)", () => {
     expect(me.json().premium.features.restaurants).toBe(true);
   });
 
+  it("shares restaurant research across users through a cached profile", async () => {
+    // Pre-seed a researched profile as if another user's research had completed.
+    const seeded = await prisma.restaurantProfile.create({
+      data: {
+        key: "name:joes crab shack|austin|TX",
+        name: "Joe's Crab Shack",
+        city: "Austin",
+        state: "TX",
+        researchStatus: "ready",
+        researchedAt: new Date(),
+        summary: "Seafood chain supplied by a national distributor.",
+        supplierTerms: ["sysco", "boar's head"],
+        researchJson: { summary: "Seafood chain supplied by a national distributor.", suppliers: [{ name: "Sysco", kind: "distributor", confidence: "confirmed", sourceUrl: null }], riskSignals: [{ signal: "2025 inspection: cold holding violation", sourceUrl: null }], sources: ["https://example.com"] },
+        researchCount: 1,
+      },
+    });
+
+    const lookup = await app.inject({ method: "GET", url: "/v1/premium/restaurants/lookup?name=Joe's%20Crab%20Shack&city=Austin&state=TX", headers: auth() });
+    expect(lookup.json()).toMatchObject({ known: true, profileId: seeded.id, fresh: true, trackedBy: 0 });
+    expect((await app.inject({ method: "GET", url: "/v1/premium/restaurants/lookup?name=Nowhere&state=TX", headers: auth() })).json()).toEqual({ known: false });
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/watchlist",
+      headers: auth(),
+      payload: { kind: "restaurant", label: "Joe's", terms: [], restaurant: { name: "Joe's Crab Shack", city: "Austin", state: "TX" } },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().research).toMatchObject({ status: "cached", profileId: seeded.id });
+    expect(created.json().researchQueued).toBe(false);
+    expect(created.json().item.terms).toContain("sysco");
+    expect(created.json().matches.map((m: { recall: { sourceId: string } }) => m.recall.sourceId)).toEqual(["031-2026"]);
+    const itemId = created.json().item.id;
+
+    const detail = await app.inject({ method: "GET", url: `/v1/premium/restaurants/${itemId}`, headers: auth() });
+    expect(detail.json()).toMatchObject({ status: "ready", supplierTerms: ["sysco", "boar's head"], shared: { profileId: seeded.id, trackedBy: 1, researchCount: 1, cacheHits: 1, fresh: true, canRefresh: false } });
+    expect(detail.json().riskSignals).toHaveLength(1);
+
+    // Refresh is throttled while the shared research is recent.
+    const refresh = await app.inject({ method: "POST", url: `/v1/premium/restaurants/${itemId}/refresh`, headers: auth() });
+    expect(refresh.statusCode).toBe(200);
+    expect(refresh.json()).toMatchObject({ queued: false, reason: "too_recent" });
+
+    // A restaurant nobody has researched yet gets a pending profile and (with queues disabled in tests) reports unavailable.
+    const novel = await app.inject({
+      method: "POST",
+      url: "/v1/watchlist",
+      headers: auth(),
+      payload: { kind: "restaurant", label: "New Spot", terms: [], restaurant: { name: "New Spot", city: "Denver", state: "CO" } },
+    });
+    expect(novel.json().research.status).toBe("unavailable");
+    expect(await prisma.restaurantProfile.count()).toBe(2);
+  });
+
   it("flips tiers from the entitlement webhook", async () => {
     process.env.REVENUECAT_WEBHOOK_SECRET = "whsec";
     const res = await app.inject({

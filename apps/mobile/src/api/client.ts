@@ -4,10 +4,12 @@ import type {
   Connector,
   CreateConnectorRequest,
   CreateWatchItemRequest,
+  CreateWatchItemResponse,
   ImportPurchasesResponse,
   Recall,
   RecallListQuery,
   RegisterDeviceRequest,
+  RestaurantLookup,
   ScanMatch,
   ScanMatchRequest,
   ScanMatchResponse,
@@ -100,8 +102,7 @@ export const api = {
   stats: () => request<Stats>("/v1/recalls/stats", { auth: false }),
 
   watchlist: () => request<{ items: WatchItem[] }>("/v1/watchlist"),
-  createWatchItem: (body: CreateWatchItemRequest) =>
-    request<{ item: WatchItem; matches: ScanMatch[]; researchQueued: boolean }>("/v1/watchlist", { method: "POST", body: JSON.stringify(body) }),
+  createWatchItem: (body: CreateWatchItemRequest) => request<CreateWatchItemResponse>("/v1/watchlist", { method: "POST", body: JSON.stringify(body) }),
   watchMatches: (id: string) => request<{ matches: ScanMatch[] }>(`/v1/watchlist/${id}/matches`),
   deleteWatchItem: (id: string) => request<void>(`/v1/watchlist/${id}`, { method: "DELETE" }),
 
@@ -132,7 +133,10 @@ export const api = {
       sources: string[];
       matchedRecalls: ScanMatch[];
       researchedAt: string | null;
-      status: "ready" | "pending";
+      status: "ready" | "pending" | "failed";
+      error: string | null;
+      shared: { profileId: string; trackedBy: number; researchCount: number; cacheHits: number; fresh: boolean; canRefresh: boolean } | null;
     }>(`/v1/premium/restaurants/${id}`),
+  restaurantLookup: (q: { name: string; city?: string; state?: string; website?: string }) => request<RestaurantLookup>(`/v1/premium/restaurants/lookup?${qs(q)}`),
   refreshRestaurant: (id: string) => request<{ queued: boolean }>(`/v1/premium/restaurants/${id}/refresh`, { method: "POST" }),
 };

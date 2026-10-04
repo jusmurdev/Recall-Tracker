@@ -53,7 +53,9 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     // Brand names lead product descriptions ("Jif Creamy Peanut Butter…"), so the first few
     // words of the description count as brand territory alongside company + extracted brands.
     const lead = recall.productDescription.toLowerCase().slice(0, 40);
-    const brandHit = matchedTerms.some((t) => lowerCompany.includes(t) || lead.includes(t) || lowerBrands.some((b) => b.includes(t) || t.includes(b)));
+    const companyHit = matchedTerms.some((t) => lowerCompany.includes(t) || lowerBrands.some((b) => b.includes(t) || t.includes(b)));
+    const leadHit = !companyHit && matchedTerms.some((t) => lead.includes(t));
+    const brandHit = companyHit || leadHit;
     const coverage = Math.min(1, matchedTerms.length / Math.max(1, item.terms.length));
     if (item.kind === "restaurant") {
       reason = "restaurant_supplier";
@@ -65,7 +67,9 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
       explanation = `Label text you scanned (${matchedTerms.join(", ")}) matches this recall.`;
     } else if (brandHit) {
       reason = "brand_match";
-      score = 0.75 + 0.25 * coverage;
+      // A hit on the recalling company / extracted brand list outranks the weaker
+      // "appears at the start of the product description" heuristic, so ties resolve deterministically.
+      score = (companyHit ? 0.75 : 0.7) + 0.25 * coverage;
       explanation = `Brand/company match on ${matchedTerms.join(", ")}.`;
     } else {
       reason = "text_match";

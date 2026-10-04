@@ -44,22 +44,57 @@ can paste a URL (e.g. a self-hosted bridge).
 
 `apps/api/src/premium/restaurantResearch.ts`
 
-Adding a `kind: "restaurant"` watch item queues a research job. The worker runs Claude with the
-server-side **web search tool** (`web_search_20260209`, up to 8 searches, user location hint
-from city/state) and a structured output schema:
+### Research is shared, not per user
+
+Research is expensive (a Claude turn with up to 8 web searches), and thousands of people
+eat at the same places. So research is stored once per real-world restaurant in
+`RestaurantProfile` and reused by every user who tracks it:
+
+- **Identity.** `restaurantKey()` normalises `{name, city, state, website}` into one key:
+  the website host when known (`host:joescrabshack.com`), else
+  `name:<normalised name>|<city>|<ST>` with punctuation and filler words
+  ("restaurant", "cafe", "the") removed. "Joe's Crab Shack, Austin TX" and
+  "joes crab shack / austin / tx" share one profile.
+- **Adding a restaurant** (`POST /v1/watchlist`, `kind: "restaurant"`): the item is linked
+  to the profile. If the profile has fresh research (`researchedAt` within
+  `RESTAURANT_RESEARCH_TTL_DAYS`, default 90) it is applied immediately: supplier terms are
+  merged into the user's item, existing supplier recalls become alerts, and the response says
+  `research.status = "cached"`. No AI call, no quota charge, `cacheHits` is incremented.
+  Otherwise one research job is queued with `jobId = research:<profileId>`, so several users
+  adding the same unknown restaurant at once still trigger a single run.
+- **Worker** (`researchProfile`): re-checks freshness first (another job may have finished),
+  then runs Claude, stores `summary`, `supplierTerms`, `researchJson`, `researchedAt` on the
+  profile and applies them to *every* linked watch item that is behind. The requesting user's
+  quota is charged; everyone else rides along free. If the AI fails and an older result exists,
+  the old result stays `ready` and the error is recorded; with no prior result the profile is
+  marked `failed` so the app can say so.
+- **Refresh** (`POST /v1/premium/restaurants/:id/refresh`) re-runs only when the shared
+  research is at least `RESTAURANT_RESEARCH_MIN_REFRESH_DAYS` old (default 7), so one user
+  cannot burn research for everyone. Otherwise it returns `queued: false, reason: "too_recent"`
+  with `nextRefreshAt`.
+- **Lookup** (`GET /v1/premium/restaurants/lookup?name&city&state&website`) tells the app
+  before the user commits whether research already exists and how many people track it.
+- **Detail** (`GET /v1/premium/restaurants/:id`) is served from the profile and includes
+  `shared: {trackedBy, researchCount, cacheHits, fresh, canRefresh}`.
+
+Each watch item keeps a snapshot (`researchSummary`, `researchUpdatedAt`, `researchJson`)
+so deleting or re-researching a profile never blanks what a user already sees.
+
+### What the research does
+
+The worker runs Claude with the server-side **web search tool** (`web_search_20260209`, up to
+8 searches, user location hint from city/state) and a structured output schema:
 
 - `suppliers[]` — distributors (Sysco, US Foods…), producers, brands, signature ingredients,
   each marked confirmed / likely / guess with a source URL.
 - `riskSignals[]` — inspection results, closures, illness reports, food-safety review themes.
 - `summary`, `sources[]`.
 
-`applyResearch()` merges confirmed/likely supplier names into the item's `terms` (generic
-words like "chicken" are filtered), stores the research JSON and summary on the item, and runs
-the matcher so existing supplier recalls appear at once. From then on the normal ingest-time
-matching alerts the user whenever a supplier is recalled (`reason: restaurant_supplier`).
-Users can re-run research from the app; results are cached on the item.
-
-`pause_turn` from long search turns is resumed up to 3 times; refusals surface as errors.
+`extractSupplierTerms()` keeps confirmed/likely names and drops generic words ("chicken",
+"rice") that would match every recall. Those terms are merged into each linked item's
+`terms`, so the normal ingest-time matching alerts users whenever a supplier is recalled
+(`reason: restaurant_supplier`). `pause_turn` from long search turns is resumed up to 3
+times; refusals surface as errors.
 
 ## 3. AI label identification
 
@@ -73,6 +108,8 @@ matched like any scan. Images are not stored.
 ## Cost notes
 
 - Imports and research are the expensive calls (tool loops); vision identification is cheap.
+- Restaurant research cost is amortised across users: `RestaurantProfile.researchCount` vs
+  `cacheHits` shows the ratio per restaurant.
 - `AiUsage` records input/output/cache tokens per feature per user; `GET /v1/premium/usage`
   exposes the last 24h to the app.
 - System prompts are stable strings so prompt caching applies across users.

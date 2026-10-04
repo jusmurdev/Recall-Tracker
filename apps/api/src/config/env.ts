@@ -19,6 +19,9 @@ const Env = z.object({
     .default("0")
     .transform((v) => v === "1" || v.toLowerCase() === "true"),
 
+  RESTAURANT_RESEARCH_TTL_DAYS: z.coerce.number().int().min(1).default(90),
+  RESTAURANT_RESEARCH_MIN_REFRESH_DAYS: z.coerce.number().int().min(0).default(7),
+
   EXPO_ACCESS_TOKEN: z.string().optional(),
 
   ANTHROPIC_API_KEY: z.string().optional(),
