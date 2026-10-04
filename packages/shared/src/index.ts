@@ -272,6 +272,58 @@ export const ScanMatchResponse = z.object({
 });
 export type ScanMatchResponse = z.infer<typeof ScanMatchResponse>;
 
+// --- Receipts -----------------------------------------------------------------
+
+export const ReceiptScanRequest = z.object({
+  /** OCR text of the receipt (on-device). */
+  ocrText: z.string().min(3).max(12000).optional(),
+  /** Premium: the receipt photo, so AI can decode lines OCR mangled. */
+  imageBase64: z.string().min(100).optional(),
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]).default("image/jpeg"),
+  /** Add every parsed item to the watchlist. */
+  watch: z.boolean().default(false),
+  context: z.string().max(300).optional(),
+});
+export type ReceiptScanRequest = z.input<typeof ReceiptScanRequest>;
+
+export const ReceiptItemStatus = z.enum(["recalled", "possible", "clear"]);
+export type ReceiptItemStatus = z.infer<typeof ReceiptItemStatus>;
+
+export const ReceiptItem = z.object({
+  raw: z.string(),
+  product: z.string(),
+  brand: z.string().nullable(),
+  terms: z.array(z.string()),
+  status: ReceiptItemStatus,
+  matches: z.array(ScanMatch),
+  watchItemId: z.string().nullable(),
+});
+export type ReceiptItem = z.infer<typeof ReceiptItem>;
+
+export const ReceiptScanResponse = z.object({
+  id: z.string(),
+  store: z.string().nullable(),
+  purchasedAt: z.string().nullable(),
+  items: z.array(ReceiptItem),
+  flagged: z.number().int(),
+  decodedByAi: z.boolean(),
+  watched: z.boolean(),
+  /** Items we could not read; shown so the user can type them in. */
+  skippedLines: z.number().int(),
+});
+export type ReceiptScanResponse = z.infer<typeof ReceiptScanResponse>;
+
+export const ReceiptSummary = z.object({
+  id: z.string(),
+  store: z.string().nullable(),
+  purchasedAt: z.string().nullable(),
+  itemCount: z.number().int(),
+  flaggedCount: z.number().int(),
+  watched: z.boolean(),
+  createdAt: z.string().datetime(),
+});
+export type ReceiptSummary = z.infer<typeof ReceiptSummary>;
+
 // ---------------------------------------------------------------------------
 // Premium — AI connectors (MCP) and restaurant research
 // ---------------------------------------------------------------------------

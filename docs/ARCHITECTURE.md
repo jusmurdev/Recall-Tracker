@@ -105,6 +105,21 @@ Location is a phone-side capability with a deliberately thin server footprint:
   enter, the task fetches that restaurant's current supplier recalls and posts a local
   notification if any exist. Requires "Always" permission on iOS; toggled in Settings.
 
+## Scanning (`scan/`)
+
+- **Products**: the phone scans UPC/EAN barcodes with the camera or runs ML Kit OCR on a
+  label photo, then `POST /v1/scan/match` extracts brand/terms (`scan/extract.ts`) and runs
+  the matcher. The screen auto-submits after OCR; no form in between.
+- **Receipts**: `scan/receipt.ts` parses OCR text into line items: detects the store and
+  date, drops totals/payments/coupons, merges prices OCR'd onto their own line, handles
+  "2 @ 1.29" quantity lines, expands ~200 cashier abbreviations, and guesses brands
+  including store brands (KRGR → Kroger, GV → Great Value). `POST /v1/scan/receipt`
+  checks each item (`recalled` ≥ 0.65, `possible` ≥ 0.45, else `clear`), optionally
+  creates de-duplicated watch items tagged `importedFrom: receipt`, and stores a
+  `ReceiptScan` so the receipt can be re-checked later as new recalls arrive. Premium users
+  may send the photo; `premium/receiptDecode.ts` asks Claude for clean product names when
+  the dictionary falls short.
+
 ## Restaurant catalog, grades and maintenance (`inspections/`)
 
 The restaurant catalog is a shared asset, not per-user data. `RestaurantProfile` holds the

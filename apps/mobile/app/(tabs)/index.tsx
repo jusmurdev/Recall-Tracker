@@ -4,7 +4,7 @@ import React from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActionTile, Body, Card, Heading, Loading, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
-import { useAlerts, useMe, useRecallFeed, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
+import { useAlerts, useMe, useRecallFeed, useReceipts, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { whyAlert } from "@/lib/friendly";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -20,6 +20,8 @@ export default function HomeScreen() {
   const updates = useRestaurantUpdates(me.data?.tier === "premium");
   const loc = useLocationState();
   const feed = useRecallFeed({ state: loc.state ?? undefined, severity: "critical" });
+  const receipts = useReceipts();
+  const lastReceipt = receipts.data?.items[0];
 
   const open = (alerts.data?.items ?? []).filter((a) => !a.resolvedAt && !a.dismissedAt);
   const unread = open.filter((a) => !a.readAt);
@@ -88,8 +90,24 @@ export default function HomeScreen() {
 
         <View style={{ flexDirection: "row", gap: spacing(1.5) }}>
           <ActionTile icon="scan" title="Check a product" subtitle="Scan a barcode or label" onPress={() => router.push("/scan")} />
-          <ActionTile icon="add-circle" title="Watch a brand" subtitle="Get told if it's recalled" onPress={() => router.push("/watch/new")} tone="soft" />
+          <ActionTile icon="receipt" title="Check a receipt" subtitle="Every item, in one snap" onPress={() => router.push("/scan")} tone="soft" />
         </View>
+        {lastReceipt ? (
+          <Pressable onPress={() => router.push(`/receipt/${lastReceipt.id}`)} accessibilityRole="button">
+            <Card tone={lastReceipt.flaggedCount ? "high" : "soft"}>
+              <View style={styles.heroRow}>
+                <Ionicons name="receipt-outline" size={20} color={lastReceipt.flaggedCount ? colors.high : colors.muted} />
+                <View style={{ flex: 1 }}>
+                  <Body style={{ fontWeight: "700" }}>
+                    Last receipt{lastReceipt.store ? ` · ${lastReceipt.store}` : ""}: {lastReceipt.flaggedCount ? `${lastReceipt.flaggedCount} item${lastReceipt.flaggedCount > 1 ? "s" : ""} flagged` : "all clear"}
+                  </Body>
+                  <Small>{lastReceipt.itemCount} items · tap to re-check against today's recalls</Small>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </View>
+            </Card>
+          </Pressable>
+        ) : null}
 
         <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
           <Card>

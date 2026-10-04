@@ -106,6 +106,51 @@ describe("HTTP API (integration)", () => {
     expect(empty.statusCode).toBe(400);
   });
 
+  it("checks a receipt line by line and can watch everything on it", async () => {
+    await prisma.user.update({ where: { id: userId }, data: { tier: "free", homeState: "VA" } });
+    const receipt = "KROGER\n10/02/2026\nJIF CRMY PNT BTR 16Z 3.49 F\nBOARS HEAD LVRWRST 6.99 F\nBNNA ORG 2.58 F\nKRGR WHL MLK GAL 3.19 F\nSUBTOTAL 16.25\nVISA 16.25";
+    const res = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.store).toBe("Kroger");
+    expect(body.purchasedAt).toBe("2026-10-02");
+    expect(body.items).toHaveLength(4);
+    const byProduct = Object.fromEntries(body.items.map((i: { product: string; status: string; matches: Array<{ recall: { sourceId: string } }> }) => [i.product, i]));
+    expect(byProduct["jif creamy peanut butter 16 oz"].status).toBe("recalled");
+    expect(byProduct["jif creamy peanut butter 16 oz"].matches[0].recall.sourceId).toBe("F-1456-2026");
+    expect(byProduct["boars head liverwurst"].status).toBe("recalled");
+    expect(byProduct["banana organic"].status).toBe("clear");
+    expect(byProduct["kroger whole milk gal"].status).toBe("clear");
+    expect(body.flagged).toBe(2);
+    expect(body.watched).toBe(false);
+    expect(body.decodedByAi).toBe(false);
+
+    // Photo decoding is premium-only.
+    expect((await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, imageBase64: "x".repeat(200) } })).statusCode).toBe(402);
+
+    // Watch everything: creates watch items once, alerts for the recalled ones.
+    const before = await prisma.watchItem.count({ where: { userId } });
+    const watched = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, watch: true, context: "weekly shop" } });
+    expect(watched.json().items.every((i: { watchItemId: string | null }) => i.watchItemId)).toBe(true);
+    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 4);
+    const again = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, watch: true } });
+    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 4); // de-duplicated
+    expect(again.json().items[0].watchItemId).toBe(watched.json().items[0].watchItemId);
+    const jifItem = await prisma.watchItem.findUniqueOrThrow({ where: { id: watched.json().items[0].watchItemId } });
+    expect(jifItem).toMatchObject({ kind: "scan", importedFrom: "receipt" });
+    expect(jifItem.context).toContain("Kroger receipt on 2026-10-02");
+    expect(await prisma.alert.count({ where: { userId, recall: { sourceId: "F-1456-2026" } } })).toBeGreaterThanOrEqual(1);
+
+    // History and re-check.
+    const list = await app.inject({ method: "GET", url: "/v1/scan/receipts", headers: auth() });
+    expect(list.json().items).toHaveLength(3);
+    expect(list.json().items[0]).toMatchObject({ store: "Kroger", itemCount: 4, flaggedCount: 2, watched: true });
+    const detail = await app.inject({ method: "GET", url: `/v1/scan/receipts/${watched.json().id}`, headers: auth() });
+    expect(detail.json().items).toHaveLength(4);
+    expect(detail.json().flagged).toBe(2);
+    expect((await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: {} })).statusCode).toBe(400);
+  });
+
   it("gates premium features behind the tier", async () => {
     const restaurant = await app.inject({
       method: "POST",

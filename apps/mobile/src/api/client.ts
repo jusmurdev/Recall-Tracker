@@ -10,6 +10,9 @@ import type {
   ImportPurchasesResponse,
   Inspection,
   NotificationPreferences,
+  ReceiptScanRequest,
+  ReceiptScanResponse,
+  ReceiptSummary,
   Recall,
   RecallListQuery,
   NearbyRestaurant,
@@ -132,6 +135,9 @@ export const api = {
   alertSummary: () => request<{ unread: number; open: number; resolved: number; dismissed: number }>("/v1/alerts/summary"),
 
   scanMatch: (body: ScanMatchRequest) => request<ScanMatchResponse>("/v1/scan/match", { method: "POST", body: JSON.stringify(body) }),
+  scanReceipt: (body: ReceiptScanRequest) => request<ReceiptScanResponse>("/v1/scan/receipt", { method: "POST", body: JSON.stringify(body) }),
+  receipts: () => request<{ items: ReceiptSummary[] }>("/v1/scan/receipts"),
+  receipt: (id: string) => request<ReceiptScanResponse>(`/v1/scan/receipts/${id}`),
   scanIdentify: (body: { imageBase64: string; mediaType?: string; ocrText?: string; context?: string }) =>
     request<ScanMatchResponse & { identified: { brand: string | null; productName: string | null; confidence: string } }>("/v1/scan/identify", {
       method: "POST",

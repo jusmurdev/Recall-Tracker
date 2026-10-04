@@ -36,8 +36,11 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 - Browse and search every recall (full-text, by category, severity, state).
 - Watch products by brand/keyword or barcode. Instant check against the last 6 months of
   recalls; push notification when a new matching recall arrives.
-- Scan: barcode via the camera, label text via on-device OCR (ML Kit), with optional context
-  ("bought at Costco", "for my toddler"). Only text leaves the phone.
+- Scan a product: barcode via the camera, or snap the label and on-device OCR (ML Kit) reads
+  it. One tap, instant verdict. Only text leaves the phone.
+- Scan a receipt: snap it, every line is decoded from cashier shorthand ("KRGR CRMY PNT BTR
+  16Z" → Kroger creamy peanut butter), checked against recalls, and can be watched in one
+  tap. Receipts are saved and re-checked against new recalls whenever reopened.
 - Alert inbox with "why you got this" explanations and confidence.
 - Location-aware ranking: the phone resolves its state on-device and sends only that, so
   recalls sold where you live or currently are rank higher and the feed has a "Near me" filter.
@@ -61,6 +64,8 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   per person and is refreshed only when stale.
 - **AI label identification.** When OCR fails (curved bottles, glare), the photo is identified
   by Claude vision and matched.
+- **AI receipt decoding.** Claude reads the receipt photo and expands lines the dictionary
+  could not, so even cryptic store abbreviations resolve to real products.
 - **Health grades.** Official inspection grades and violation history from health-department
   open data (NYC and Chicago adapters; AI research elsewhere), refreshed weekly and shared.
   Trackers are notified when a grade drops.

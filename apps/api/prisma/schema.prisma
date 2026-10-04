@@ -159,6 +159,7 @@ model User {
   connectors Connector[]
   aiUsage    AiUsage[]
   restaurantNotices RestaurantNotice[]
+  receipts   ReceiptScan[]
 }
 
 model Device {
@@ -353,6 +354,25 @@ model Alert {
   @@unique([userId, recallId])
   @@index([userId, createdAt(sort: Desc)])
   @@index([pushedAt])
+}
+
+/// A scanned receipt: what was bought, what was flagged. Kept so the user can revisit it.
+model ReceiptScan {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store        String?
+  purchasedAt  DateTime?
+  itemCount    Int
+  flaggedCount Int
+  /// [{ raw, product, brand, terms, status, recallIds[] }]
+  items        Json
+  /// Whether the items were added to the watchlist.
+  watched      Boolean  @default(false)
+  decodedByAi  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 /// Remote MCP server connected by a premium user (grocery/delivery/shopping data).

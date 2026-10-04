@@ -64,7 +64,7 @@ export default function WatchlistScreen() {
                   ? item.categories.map((c) => CATEGORY_FRIENDLY[c]).join(", ")
                   : item.kind === "restaurant"
                     ? item.researchUpdatedAt ? "Watching suppliers & health grade" : "Looking into suppliers…"
-                    : KIND[item.kind].label}
+                    : item.importedFrom === "receipt" ? "From a receipt" : KIND[item.kind].label}
               </Text>
             </View>
             <Pressable

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CreateWatchItemRequest, DismissAlertRequest, RecallListQuery, ResolveAlertRequest, ScanMatchRequest, UpdatePreferencesRequest } from "@recall/shared";
+import type { CreateWatchItemRequest, DismissAlertRequest, RecallListQuery, ReceiptScanRequest, ResolveAlertRequest, ScanMatchRequest, UpdatePreferencesRequest } from "@recall/shared";
 import { useEffect } from "react";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
@@ -109,3 +109,19 @@ export function useUpdatePreferences() {
 }
 
 export const useRestaurantUpdates = (enabled: boolean) => useQuery({ queryKey: ["restaurant-updates"], queryFn: api.restaurantUpdates, enabled, refetchInterval: 5 * 60_000 });
+
+export function useScanReceipt() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ReceiptScanRequest) => api.scanReceipt(body),
+    onSuccess: (_d, vars) => {
+      void qc.invalidateQueries({ queryKey: ["receipts"] });
+      if (vars.watch) {
+        void qc.invalidateQueries({ queryKey: keys.watchlist });
+        void qc.invalidateQueries({ queryKey: keys.alerts });
+      }
+    },
+  });
+}
+export const useReceipts = () => useQuery({ queryKey: ["receipts"], queryFn: api.receipts });
+export const useReceipt = (id: string) => useQuery({ queryKey: ["receipt", id], queryFn: () => api.receipt(id) });
