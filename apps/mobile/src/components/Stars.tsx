@@ -6,7 +6,7 @@ import { colors } from "@/lib/theme";
 
 const levelColor: Record<SafetyRating["level"], string> = { good: colors.success, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
 
-/** 1–5 stars in half steps, coloured by level. "No rating" when there's nothing to rate on. */
+/** 1–5 stars in half steps, colored by level. "No rating" when there's nothing to rate on. */
 export function Stars({ rating, size = 16, showNumber = true }: { rating: SafetyRating; size?: number; showNumber?: boolean }) {
   if (rating.stars == null) {
     return (

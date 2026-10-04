@@ -109,7 +109,7 @@ export function gradeFriendly(grade: RestaurantGrade | null | undefined): { titl
   const g = grade.grade ?? String(grade.score);
   switch (grade.level) {
     case "good":
-      return { title: `Grade ${g}`, body: "Passed its last inspection with flying colours.", level: "good" };
+      return { title: `Grade ${g}`, body: "Passed its last inspection with flying colors.", level: "good" };
     case "ok":
       return { title: `Grade ${g}`, body: "Passed, but inspectors found some things to fix.", level: "ok" };
     case "poor":

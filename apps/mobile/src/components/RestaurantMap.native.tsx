@@ -16,7 +16,7 @@ export interface RestaurantMapProps {
   onRegionSettled: (c: { latitude: number; longitude: number; radiusKm: number }) => void;
 }
 
-/** Apple Maps on iOS, Google Maps on Android (via react-native-maps). Pins are coloured by rating. */
+/** Apple Maps on iOS, Google Maps on Android (via react-native-maps). Pins are colored by rating. */
 export function RestaurantMap({ center, radiusKm, items, selectedId, onSelect, onOpen, onRegionSettled }: RestaurantMapProps) {
   const ref = useRef<MapView>(null);
   const delta = Math.max(0.01, (radiusKm * 2) / 111);

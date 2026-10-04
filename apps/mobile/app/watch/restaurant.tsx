@@ -125,7 +125,7 @@ export default function NewRestaurant() {
           <Body muted>We'll find its health grade and who supplies the kitchen, and tell you if either changes.</Body>
           <Button title={loc.busy ? "Locating…" : "I'm here — use my location"} variant="ghost" loading={loc.busy} onPress={() => void useMyLocation()} />
           {nearby.length ? (
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: 10 }}>
               <Body muted>Tracked restaurants nearby</Body>
               {nearby.slice(0, 5).map((n) => (
                 <Pressable key={n.profileId} onPress={() => pickNearby(n)} style={styles.nearby}>
@@ -148,7 +148,7 @@ export default function NewRestaurant() {
             }}
           />
           {catalog.length ? (
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: 10 }}>
               <Body muted>Already known — tap to use it</Body>
               {catalog.slice(0, 5).map((c) => (
                 <Pressable key={c.profileId} onPress={() => pickCatalog(c)} style={styles.nearby} accessibilityRole="button">

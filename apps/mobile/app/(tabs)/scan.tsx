@@ -266,6 +266,6 @@ const styles = StyleSheet.create({
   frameWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
   frame: { width: "78%", aspectRatio: 1.4, borderWidth: 3, borderColor: "rgba(255,255,255,0.9)", borderRadius: 18 },
   frameTall: { aspectRatio: 0.6, width: "62%" },
-  overlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing(2), gap: spacing(1), backgroundColor: "rgba(247,244,238,0.95)", borderTopLeftRadius: 22, borderTopRightRadius: 22 },
+  overlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: spacing(2), gap: spacing(1.5), backgroundColor: "rgba(247,244,238,0.95)", borderTopLeftRadius: 22, borderTopRightRadius: 22 },
   hint: { color: colors.text, textAlign: "center", marginBottom: 4, fontWeight: "600" },
 });

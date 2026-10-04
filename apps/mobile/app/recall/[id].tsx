@@ -69,7 +69,7 @@ export default function RecallDetail() {
           </Card>
         ) : null}
 
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flexDirection: "row", gap: 12 }}>
           <Button title="I have this" icon="eye" style={{ flex: 1 }} onPress={() => router.push({ pathname: "/watch/new", params: { prefill: headline(r) } })} />
           <Button title="Share" icon="share-social-outline" variant="secondary" style={{ flex: 1 }} onPress={share} />
         </View>

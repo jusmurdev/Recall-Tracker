@@ -70,7 +70,7 @@ export default function ConnectorsScreen() {
             </View>
             <Body muted>{c.provider} · {c.mcpUrl}</Body>
             {c.lastSyncError ? <Body style={{ color: colors.critical }}>{c.lastSyncError}</Body> : null}
-            <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <Button
                 title="Import my purchases"
                 style={{ flex: 1 }}

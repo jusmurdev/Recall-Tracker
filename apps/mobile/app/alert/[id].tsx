@@ -78,7 +78,7 @@ export default function AlertDetail() {
                 </View>
               </>
             ) : null}
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 12 }}>
               <Button
                 title="Yes — I dealt with it"
                 icon="checkmark"
@@ -92,10 +92,8 @@ export default function AlertDetail() {
                 }
               />
               <Button title="Checked — mine's not affected" variant="secondary" onPress={() => actions.resolve.mutate({ id, action: "checked_not_affected" })} />
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <Button title="Don't have it" variant="ghost" style={{ flex: 1 }} onPress={() => actions.dismiss.mutate({ id, reason: "dont_have" })} />
-                <Button title="Not my product" variant="ghost" style={{ flex: 1 }} onPress={() => actions.dismiss.mutate({ id, reason: "false_match" })} />
-              </View>
+              <Button title="I don't have this" variant="ghost" onPress={() => actions.dismiss.mutate({ id, reason: "dont_have" })} />
+              <Button title="This isn't my product" variant="ghost" onPress={() => actions.dismiss.mutate({ id, reason: "false_match" })} />
             </View>
           </Card>
         )}

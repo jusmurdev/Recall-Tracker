@@ -96,7 +96,7 @@ export default function SettingsScreen() {
             <Subtitle>Where you are</Subtitle>
             <Body>{me.data?.homeState ? `Home: ${me.data.homeState}${me.data.lastKnownState && me.data.lastKnownState !== me.data.homeState ? ` · now in ${me.data.lastKnownState}` : ""}` : "We don't know your state yet"}</Body>
             <Small>Recalls sold near you come first. We only ever save the state, never your exact location.</Small>
-            <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <Button title={loc.busy ? "Finding you…" : "Use my location"} icon="locate" style={{ flex: 1 }} loading={loc.busy} onPress={() => void loc.refresh({ ask: true, setHome: !me.data?.homeState })} />
               {loc.state ? <Button title="Set as home" variant="secondary" onPress={() => void loc.refresh({ ask: true, setHome: true })} /> : null}
             </View>
@@ -185,7 +185,7 @@ export default function SettingsScreen() {
 
           <Card>
             <Collapsible title="About this app">
-              <View style={{ gap: 8 }}>
+              <View style={{ gap: 12 }}>
                 <Small>
                   We pull every recall a few times a day from the FDA, USDA and CPSC into one place, so your phone never has to. This app surfaces official notices; always follow the instructions in the recall itself.
                 </Small>

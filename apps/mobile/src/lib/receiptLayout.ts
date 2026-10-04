@@ -12,7 +12,7 @@ export interface Row {
   y: number;
 }
 
-/** Group lines whose vertical centres fall within `tolerance` (fraction of image height). */
+/** Group lines whose vertical centers fall within `tolerance` (fraction of image height). */
 export function reconstructRows(lines: OcrLine[], tolerance = 0.012): Row[] {
   const sorted = [...lines]
     .filter((l) => l.text.trim())
