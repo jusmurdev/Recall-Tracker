@@ -5,7 +5,8 @@ import { Linking, ScrollView, Share, StyleSheet, Text, View } from "react-native
 import { CATEGORY_LABEL } from "@recall/shared";
 import { Body, Button, Card, Collapsible, Heading, Loading, Screen, SeverityChip, Small, Subtitle, Title } from "@/components/ui";
 import { useRecall } from "@/hooks/queries";
-import { CATEGORY_EMOJI, SEVERITY, headline, plainReason } from "@/lib/friendly";
+import { useBottomPad } from "@/hooks/useBottomPad";
+import { CATEGORY_EMOJI, SEVERITY, displayBarcode, headline, plainReason } from "@/lib/friendly";
 import { colors, severityColor, spacing } from "@/lib/theme";
 
 /**
@@ -15,6 +16,7 @@ import { colors, severityColor, spacing } from "@/lib/theme";
 export default function RecallDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useRecall(id);
+  const bottomPad = useBottomPad();
   if (q.isLoading || !q.data) {
     return (
       <Screen>
@@ -30,7 +32,7 @@ export default function RecallDetail() {
   return (
     <Screen>
       <Stack.Screen options={{ headerRight: () => <Ionicons name="share-outline" size={22} color={colors.text} onPress={share} accessibilityLabel="Share this recall" /> }} />
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(5) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ fontSize: 34 }}>{CATEGORY_EMOJI[r.category]}</Text>
@@ -81,7 +83,7 @@ export default function RecallDetail() {
               <Row label="Announced" value={new Date(r.publishedAt).toLocaleDateString()} />
               <Row label="Status" value={r.status === "ongoing" ? "Still active" : r.status === "completed" ? "Completed" : r.status} />
               <Row label="Source" value={`${r.source === "FSIS" ? "USDA FSIS" : r.source} · ${r.sourceId}`} />
-              {r.upcs.length ? <Row label="Barcodes" value={r.upcs.join(", ")} /> : null}
+              {r.upcs.length ? <Row label="Barcodes" value={r.upcs.map(displayBarcode).join(", ")} /> : null}
               <View style={{ gap: 4 }}>
                 <Small>Full product description</Small>
                 <Body>{r.productDescription}</Body>

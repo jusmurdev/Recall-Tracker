@@ -10,6 +10,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ensureSession } from "@/api/client";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
 import { useGeofenceSync } from "@/hooks/useGeofenceSync";
+import { useTimezoneSync } from "@/hooks/useTimezoneSync";
 import { colors } from "@/lib/theme";
 // Registers the background geofence task at bundle load (required by iOS).
 import "@/lib/geofence";
@@ -28,6 +29,7 @@ function Boot({ children }: { children: React.ReactNode }) {
   }, []);
   usePushRegistration();
   useGeofenceSync(ready);
+  useTimezoneSync(ready);
   return ready ? <>{children}</> : null;
 }
 

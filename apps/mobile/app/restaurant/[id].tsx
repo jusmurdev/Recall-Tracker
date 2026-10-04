@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import { Stars } from "@/components/Stars";
 import { Body, Button, Card, Collapsible, Heading, Loading, PremiumTag, RecallRow, Screen, Small, Subtitle, Title, gradeColor } from "@/components/ui";
 import { useCreateWatchItem, useMe } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { gradeFriendly } from "@/lib/friendly";
 import { colors, spacing } from "@/lib/theme";
 
@@ -27,6 +28,7 @@ export default function PublicRestaurant() {
   const g = gradeFriendly(r.grade);
   const tone = r.rating.level === "good" ? "success" : r.rating.level === "ok" ? "high" : r.rating.level === "poor" ? "critical" : "soft";
   const premium = me.data?.tier === "premium";
+  const bottomPad = useBottomPad();
   const track = () =>
     premium
       ? create.mutate({ kind: "restaurant", label: r.name, terms: [], categories: [], restaurant: { profileId: r.profileId, name: r.name } }, { onSuccess: (res) => router.replace(`/watch/${res.item.id}`) })
@@ -35,7 +37,7 @@ export default function PublicRestaurant() {
   return (
     <Screen>
       <Stack.Screen options={{ title: "" }} />
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(6) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 6 }}>
           <Title>{r.name}</Title>
           <Small>{[r.address, r.city, r.state].filter(Boolean).join(", ")}</Small>

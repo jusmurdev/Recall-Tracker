@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type ViewProps, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type ViewProps, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Recall, RecallSeverity, RestaurantGrade } from "@recall/shared";
 import { colors, radius, severityColor, severitySoft, spacing } from "@/lib/theme";
@@ -119,7 +119,9 @@ export function Pill({ label, active, onPress, icon }: { label: string; active?:
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: !!active }} accessibilityLabel={label} onPress={onPress} style={[styles.pill, active && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
       {icon ? <Ionicons name={icon} size={14} color={active ? "#fff" : colors.muted} /> : null}
-      <Text style={[styles.pillText, active && { color: "#fff", fontWeight: "700" }]}>{label}</Text>
+      <Text style={[styles.pillText, active && { color: "#fff", fontWeight: "700" }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -228,6 +230,37 @@ export function Empty({ title, body, icon = "leaf-outline" }: { title: string; b
   );
 }
 
+/**
+ * A labeled switch where the whole row toggles, not just the knob. Label and description sit on
+ * the left, the switch on the right.
+ */
+export function SwitchRow({ label, description, value, onValueChange, disabled }: { label: string; description?: string; value: boolean; onValueChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <Pressable accessibilityRole="switch" accessibilityState={{ checked: value, disabled }} accessibilityLabel={label} disabled={disabled} onPress={() => onValueChange(!value)} style={({ pressed }) => [styles.switchRow, pressed && { opacity: 0.7 }]}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.body}>{label}</Text>
+        {description ? <Text style={styles.small}>{description}</Text> : null}
+      </View>
+      <Switch value={value} disabled={disabled} onValueChange={onValueChange} trackColor={{ true: colors.accent }} />
+    </Pressable>
+  );
+}
+
+/** Shown when a screen is displaying cached data because the server could not be reached. */
+export function OfflineNotice({ onRetry, stale }: { onRetry?: () => void; stale?: boolean }) {
+  return (
+    <View style={styles.offline} accessibilityRole="alert">
+      <Ionicons name="cloud-offline-outline" size={18} color={colors.high} />
+      <Text style={[styles.small, { flex: 1, color: colors.text }]}>{stale ? "Can't reach the server. Showing what we saved earlier." : "Can't reach the server. Check your connection."}</Text>
+      {onRetry ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Try again" onPress={onRetry} style={styles.retry}>
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function Loading() {
   return (
     <View style={styles.empty}>
@@ -254,7 +287,11 @@ const styles = StyleSheet.create({
   chip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontSize: 12, fontWeight: "700" },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  pill: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, marginBottom: 8 },
+  pill: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8, marginBottom: 8, flexShrink: 0 },
+  switchRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 4 },
+  offline: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: colors.highSoft, borderRadius: radius.md, borderWidth: 1, borderColor: "rgba(224,154,43,0.35)" },
+  retry: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.high },
+  retryText: { color: colors.high, fontWeight: "700", fontSize: 13 },
   pillText: { color: colors.text, fontSize: 14 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: spacing(2), backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   emojiBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },

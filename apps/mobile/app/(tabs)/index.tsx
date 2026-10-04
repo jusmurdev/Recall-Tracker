@@ -3,7 +3,8 @@ import { router } from "expo-router";
 import React from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActionTile, Body, Card, Heading, Loading, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
+import { ActionTile, Body, Card, Heading, Loading, OfflineNotice, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
+import { ApiError } from "@/api/client";
 import { useAlerts, useMe, useRecallFeed, useReceipts, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { whyAlert } from "@/lib/friendly";
@@ -29,6 +30,9 @@ export default function HomeScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const latest = feed.data?.pages[0]?.items.slice(0, 3) ?? [];
+  const offlineErr = (e: unknown) => !!e && (e instanceof ApiError ? e.offline : true);
+  const offline = (alerts.isError && offlineErr(alerts.error)) || (feed.isError && offlineErr(feed.error));
+  const retry = () => void Promise.all([alerts.refetch(), list.refetch(), feed.refetch(), me.refetch()]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
@@ -37,6 +41,7 @@ export default function HomeScreen() {
           <Small>{greeting}</Small>
           <Title>Recall Tracker</Title>
         </View>
+        {offline ? <OfflineNotice stale={!!alerts.data || !!feed.data} onRetry={retry} /> : null}
 
         {alerts.isLoading ? (
           <Loading />

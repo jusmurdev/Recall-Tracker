@@ -1,8 +1,21 @@
+import Constants from "expo-constants";
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Callout, Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import type { MapRestaurant } from "@recall/shared";
 import { colors } from "@/lib/theme";
+
+/**
+ * Google Maps on Android needs an API key baked into the build; without one the map view throws
+ * `IllegalStateException: API key not found` and takes the app down. Apple Maps on iOS needs
+ * nothing. Screens check this before rendering a map and fall back to the list.
+ */
+export function mapViewAvailable(): boolean {
+  if (Platform.OS === "ios") return true;
+  if (Platform.OS !== "android") return false;
+  const cfg = Constants.expoConfig?.android?.config as { googleMaps?: { apiKey?: string } } | undefined;
+  return !!cfg?.googleMaps?.apiKey?.trim();
+}
 
 const pinColor: Record<MapRestaurant["rating"]["level"], string> = { good: colors.success, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
 

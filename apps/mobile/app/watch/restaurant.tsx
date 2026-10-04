@@ -5,6 +5,7 @@ import type { CatalogRestaurant, NearbyRestaurant, RestaurantLookup } from "@rec
 import { Pressable, Text, View } from "react-native";
 import { Body, Button, Card, GradeBadge, Input, PremiumTag, Screen, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { useLocationState } from "@/hooks/useLocationState";
 import { api, ApiError } from "@/api/client";
 import { geocodeAddress } from "@/lib/location";
@@ -17,6 +18,7 @@ export default function NewRestaurant() {
   const [website, setWebsite] = useState("");
   const [context, setContext] = useState("");
   const create = useCreateWatchItem();
+  const bottomPad = useBottomPad();
   const [lookup, setLookup] = useState<RestaurantLookup | null>(null);
   const [catalog, setCatalog] = useState<CatalogRestaurant[]>([]);
   const [picked, setPicked] = useState<CatalogRestaurant | null>(null);
@@ -119,7 +121,7 @@ export default function NewRestaurant() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         <Card>
           <Subtitle>Which restaurant?</Subtitle>
           <Body muted>We'll find its health grade and who supplies the kitchen, and tell you if either changes.</Body>
@@ -174,7 +176,7 @@ export default function NewRestaurant() {
           <Input placeholder="State (e.g. TX)" value={state} onChangeText={setState} autoCapitalize="characters" maxLength={2} />
           <Input placeholder="Website (optional)" value={website} onChangeText={setWebsite} autoCapitalize="none" keyboardType="url" />
           <Input placeholder="Notes (optional): going Friday, kids' birthday…" value={context} onChangeText={setContext} />
-          {lookup?.known && lookup.fresh ? (
+          {picked ? null : lookup?.known && lookup.fresh ? (
             <Body style={{ color: colors.accent }}>
               Already researched{lookup.trackedBy ? ` · tracked by ${lookup.trackedBy} ${lookup.trackedBy === 1 ? "person" : "people"}` : ""}. Results appear instantly.
             </Body>

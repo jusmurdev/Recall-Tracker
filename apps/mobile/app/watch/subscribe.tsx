@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { Body, Button, Card, Empty, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
 import { useCreateWatchItem, useMe } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { CATEGORY_EMOJI, CATEGORY_FRIENDLY } from "@/lib/friendly";
 import { colors, radius, spacing } from "@/lib/theme";
 
@@ -20,11 +21,12 @@ export default function Subscribe() {
   const [min, setMin] = useState<RecallSeverity>("critical");
   const create = useCreateWatchItem();
   const me = useMe();
+  const bottomPad = useBottomPad();
   const label = `${SEV.find((s) => s.v === min)!.label}: ${cats.map((c) => CATEGORY_FRIENDLY[c]).join(", ")}`;
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         {!create.data ? (
           <>
             <Card>

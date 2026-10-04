@@ -1,12 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert as RNAlert, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert as RNAlert, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { api } from "@/api/client";
-import { Body, Button, Card, Collapsible, Pill, PremiumTag, Screen, Small, Subtitle, Title } from "@/components/ui";
+import { Body, Button, Card, Collapsible, Pill, PremiumTag, Screen, Small, Subtitle, SwitchRow, Title } from "@/components/ui";
+import { deviceTimezone } from "@/hooks/useTimezoneSync";
+import { usePushStatus } from "@/lib/pushStatus";
 import { useMe, useStats, useUpdatePreferences, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { setToken } from "@/lib/auth";
@@ -34,6 +36,8 @@ export default function SettingsScreen() {
   const prefs = me.data?.preferences;
   const update = useUpdatePreferences();
   const setPref = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
+  const push = usePushStatus();
+  const tz = prefs?.timezone ?? deviceTimezone();
   const [geofences, setGeofences] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
   useEffect(() => {
@@ -113,20 +117,22 @@ export default function SettingsScreen() {
                     <Pill key={s.v} label={s.label} active={prefs.pushMinSeverity === s.v} onPress={() => setPref({ pushMinSeverity: s.v })} />
                   ))}
                 </View>
-                <View style={styles.switchRow}>
-                  <View style={{ flex: 1 }}>
-                    <Body>Quiet hours</Body>
-                    <Small>{prefs.quietHoursStart != null ? `Non-urgent alerts wait until ${fmtHour(prefs.quietHoursEnd ?? 7)}` : "Hold non-urgent alerts overnight"}</Small>
+                <SwitchRow
+                  label="Quiet hours"
+                  description={prefs.quietHoursStart != null ? `Non-urgent alerts wait until ${fmtHour(prefs.quietHoursEnd ?? 7)}${tz ? ` (${tz.replace(/_/g, " ")})` : ""}` : "Hold non-urgent alerts overnight"}
+                  value={prefs.quietHoursStart != null}
+                  onValueChange={(v) => setPref(v ? { quietHoursStart: 22, quietHoursEnd: 7 } : { quietHoursStart: null, quietHoursEnd: null })}
+                />
+                <SwitchRow label="One daily summary" description="Instead of a buzz per alert. Serious recalls still come straight away." value={prefs.digestMode} onValueChange={(v) => setPref({ digestMode: v })} />
+                {push.state === "unavailable" || push.state === "denied" ? (
+                  <View style={styles.notice}>
+                    <Ionicons name="notifications-off-outline" size={18} color={colors.high} />
+                    <Small style={{ flex: 1, color: colors.text }}>
+                      {push.state === "denied" ? "Notifications are turned off for this app. Alerts still appear here and on the Home tab." : "Push notifications aren't available in this build. Alerts still appear here and on the Home tab."}
+                      {tz ? ` Quiet hours and summaries use your phone's time zone (${tz.replace(/_/g, " ")}).` : ""}
+                    </Small>
                   </View>
-                  <Switch value={prefs.quietHoursStart != null} onValueChange={(v) => setPref(v ? { quietHoursStart: 22, quietHoursEnd: 7 } : { quietHoursStart: null, quietHoursEnd: null })} trackColor={{ true: colors.accent }} />
-                </View>
-                <View style={styles.switchRow}>
-                  <View style={{ flex: 1 }}>
-                    <Body>One daily summary</Body>
-                    <Small>Instead of a buzz per alert. Serious recalls still come straight away.</Small>
-                  </View>
-                  <Switch value={prefs.digestMode} onValueChange={(v) => setPref({ digestMode: v })} trackColor={{ true: colors.accent }} />
-                </View>
+                ) : null}
                 <Collapsible title="More options">
                   <View style={{ gap: 10 }}>
                     {prefs.digestMode ? (
@@ -173,13 +179,7 @@ export default function SettingsScreen() {
 
           {premium && geofenceSupported() ? (
             <Card>
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <Body>Heads-up when I arrive</Body>
-                  <Small>A nudge if you walk into a tracked restaurant with a supplier recall. Needs "Always" location.</Small>
-                </View>
-                <Switch value={geofences} disabled={geoBusy} onValueChange={(v) => void toggleGeofences(v)} trackColor={{ true: colors.accent }} />
-              </View>
+              <SwitchRow label="Heads-up when I arrive" description={'A nudge if you walk into a tracked restaurant with a supplier recall. Needs "Always" location.'} value={geofences} disabled={geoBusy} onValueChange={(v) => void toggleGeofences(v)} />
             </Card>
           ) : null}
 
@@ -212,7 +212,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  notice: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, backgroundColor: colors.highSoft, borderRadius: radius.sm },
   sourceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   _r: { borderRadius: radius.sm },
   _t: { color: colors.text },

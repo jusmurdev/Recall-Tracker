@@ -1,9 +1,10 @@
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, View } from "react-native";
+import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
-import { Empty, Input, Loading, Pill, RecallRow, Small, Title } from "@/components/ui";
+import { Button, Empty, Input, Loading, OfflineNotice, Pill, RecallRow, Small, Title } from "@/components/ui";
+import { ApiError } from "@/api/client";
 import { useRecallFeed } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { CATEGORY_EMOJI, CATEGORY_FRIENDLY } from "@/lib/friendly";
@@ -29,6 +30,7 @@ export default function BrowseScreen() {
   );
   const feed = useRecallFeed(query);
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
+  const offline = feed.isError && (feed.error instanceof ApiError ? feed.error.offline : true);
   const toggleNearMe = async () => {
     if (nearMe) return setNearMe(false);
     const p = loc.place ?? (await loc.refresh({ ask: true }));
@@ -41,6 +43,8 @@ export default function BrowseScreen() {
         data={items}
         keyExtractor={(r) => r.id}
         contentContainerStyle={{ padding: spacing(2), gap: spacing(1.5), paddingBottom: spacing(6) }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={feed.isRefetching} onRefresh={() => void feed.refetch()} tintColor={colors.accent} />}
         onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && void feed.fetchNextPage()}
         onEndReachedThreshold={0.6}
@@ -51,23 +55,39 @@ export default function BrowseScreen() {
               <Small>Everything from the FDA, USDA and CPSC, in plain English.</Small>
             </View>
             <Input placeholder="Search a brand, product or ingredient" value={q} onChangeText={setQ} autoCorrect={false} returnKeyType="search" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {offline && items.length ? <OfflineNotice stale onRetry={() => void feed.refetch()} /> : null}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.pillRow}>
               <Pill label={nearMe && loc.state ? `Sold in ${loc.state}` : loc.busy ? "Locating…" : "Near me"} icon="location-outline" active={nearMe} onPress={() => void toggleNearMe()} />
               {SEVERITIES.map((s) => (
                 <Pill key={s.v} label={s.label} active={severity === s.v} onPress={() => setSeverity(s.v)} />
               ))}
             </ScrollView>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.pillRow}>
               {CATEGORIES.map((c) => (
                 <Pill key={c} label={c === "all" ? "All" : `${CATEGORY_EMOJI[c]} ${CATEGORY_FRIENDLY[c]}`} active={category === c} onPress={() => setCategory(c)} />
               ))}
             </ScrollView>
           </View>
         }
-        ListEmptyComponent={feed.isLoading ? <Loading /> : <Empty icon="search-outline" title="Nothing here" body="Try a different word or widen the filters." />}
+        ListEmptyComponent={
+          feed.isLoading ? <Loading />
+          : offline ? (
+            <View style={{ gap: spacing(1.5) }}>
+              <Empty icon="cloud-offline-outline" title="Can't reach the server" body="Check your connection and try again. Recalls you've already seen stay available offline." />
+              <Button title="Try again" variant="secondary" icon="refresh" onPress={() => void feed.refetch()} />
+            </View>
+          )
+          : <Empty icon="search-outline" title="Nothing here" body="Try a different word or widen the filters." />
+        }
         renderItem={({ item }) => <RecallRow recall={item} onPress={() => router.push(`/recall/${item.id}`)} />}
         ListFooterComponent={feed.isFetchingNextPage ? <Loading /> : null}
       />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  // Room on the right so the last chip is never clipped, and a fixed row height so chips do not
+  // get squeezed when the keyboard is open.
+  pillRow: { paddingRight: spacing(2), alignItems: "center", minHeight: 48 },
+});

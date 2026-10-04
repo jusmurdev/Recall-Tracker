@@ -35,7 +35,9 @@ export const CATEGORY_FRIENDLY: Record<RecallCategory, string> = {
 };
 
 /** "J.M. Smucker Co.: Jif Creamy Peanut Butter, 16 oz plastic jar, UPC 0 51500 24128 1" → "Jif Creamy Peanut Butter" */
-export function headline(recall: Pick<Recall, "title" | "productDescription" | "source">): string {
+export function headline(recall: Pick<Recall, "title" | "productDescription" | "source"> & { headline?: string }): string {
+  // The server sends a cleaned headline (company prefix removed, shouting fixed, codes dropped).
+  if (recall.headline && recall.headline.trim()) return recall.headline;
   let t = recall.title;
   const colon = t.indexOf(": ");
   if (colon > 0 && colon < 60) t = t.slice(colon + 2);
@@ -126,4 +128,12 @@ export function relativeDay(iso: string): string {
   if (days === 1) return "Yesterday";
   if (days < 7) return `${days} days ago`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Barcodes are stored as GTIN-14; show UPC-A as the familiar 12 digits. */
+export function displayBarcode(code: string): string {
+  const d = code.replace(/\D/g, "");
+  if (d.length === 14 && d.startsWith("00")) return d.slice(2);
+  if (d.length === 14 && d.startsWith("0")) return d.slice(1);
+  return d;
 }

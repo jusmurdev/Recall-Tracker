@@ -4,6 +4,7 @@ import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { Body, Button, Card, Heading, Loading, Screen, SeverityChip, Small, Subtitle, Title } from "@/components/ui";
 import { useAlert, useAlertAction, useMarkRead } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { CATEGORY_EMOJI, SEVERITY, headline, plainReason, whyAlert } from "@/lib/friendly";
 import { colors, spacing } from "@/lib/theme";
 
@@ -20,6 +21,7 @@ export default function AlertDetail() {
   const q = useAlert(id);
   const markRead = useMarkRead();
   const actions = useAlertAction();
+  const bottomPad = useBottomPad();
   useEffect(() => {
     if (q.data && !q.data.readAt) markRead.mutate(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,7 +39,7 @@ export default function AlertDetail() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(5) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ fontSize: 34 }}>{CATEGORY_EMOJI[r.category]}</Text>

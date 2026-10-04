@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { ScrollView, View } from "react-native";
 import { Body, Button, Card, Collapsible, Empty, Input, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { whyAlert } from "@/lib/friendly";
 import { colors, spacing } from "@/lib/theme";
 
@@ -13,6 +14,7 @@ export default function NewWatchItem() {
   const [upc, setUpc] = useState("");
   const [context, setContext] = useState("");
   const create = useCreateWatchItem();
+  const bottomPad = useBottomPad();
 
   const submit = () => {
     const text = what.trim();
@@ -26,7 +28,7 @@ export default function NewWatchItem() {
   const matches = create.data?.matches ?? [];
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         {!create.data ? (
           <>
             <Card>

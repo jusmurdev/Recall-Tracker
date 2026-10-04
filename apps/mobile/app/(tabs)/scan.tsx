@@ -4,11 +4,11 @@ import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
 import { router } from "expo-router";
 import React, { useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReceiptScanResponse, ScanMatchResponse } from "@recall/shared";
 import { api, ApiError } from "@/api/client";
-import { Body, Button, Card, Empty, Input, PremiumTag, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
+import { Body, Button, Card, Empty, Input, PremiumTag, RecallRow, Screen, Small, Subtitle, SwitchRow } from "@/components/ui";
 import { useMe, useScanMatch, useScanReceipt } from "@/hooks/queries";
 import { barcodesInPhoto, recognizeText } from "@/lib/ocr";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -206,10 +206,7 @@ export default function ScanScreen() {
                 style={{ minHeight: target === "receipt" ? 140 : 70 }}
                 autoCapitalize="characters"
               />
-              <View style={styles.switchRow}>
-                <Body style={{ flex: 1 }}>{target === "receipt" ? "Keep an eye on all of these" : "Keep an eye on this for me"}</Body>
-                <Switch value={watch} onValueChange={setWatch} trackColor={{ true: colors.accent }} />
-              </View>
+              <SwitchRow label={target === "receipt" ? "Keep an eye on all of these" : "Keep an eye on this for me"} value={watch} onValueChange={setWatch} />
               <Button title={busy ?? "Check it"} icon="search" loading={!!busy} disabled={text.trim().length < 2} onPress={() => (target === "receipt" ? void checkReceipt({ ocrText: text }) : void checkProduct({ ocrText: text }))} />
               {error ? <Body style={{ color: colors.critical }}>{error}</Body> : null}
               {photo && target === "product" ? <Button title="Use the photo instead" variant="ghost" icon="sparkles" onPress={() => void identifyWithAi()} /> : null}

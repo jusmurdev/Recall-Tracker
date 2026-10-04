@@ -45,6 +45,29 @@ export class ApiError extends Error {
   get premiumRequired(): boolean {
     return this.status === 402;
   }
+  /** The request never reached the server (offline, wrong address, server down). */
+  get offline(): boolean {
+    return this.status === 0;
+  }
+}
+
+export const OFFLINE_MESSAGE = "Can't reach the server. Check your connection and try again.";
+
+/** fetch() rejects with a raw TypeError/IOException when the network is down; say it plainly. */
+async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (err) {
+    throw new ApiError(0, "network", OFFLINE_MESSAGE);
+  }
+}
+
+function deviceTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 let signingIn: Promise<string> | null = null;
@@ -56,10 +79,11 @@ export async function ensureSession(): Promise<string> {
   if (!signingIn) {
     signingIn = (async () => {
       const installId = await getInstallId();
-      const res = await fetch(`${apiBaseUrl()}/v1/auth/anonymous`, {
+      const res = await safeFetch(`${apiBaseUrl()}/v1/auth/anonymous`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ installId, platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web" }),
+        // Timezone travels with sign-in so quiet hours are right even when push registration fails.
+        body: JSON.stringify({ installId, platform: Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "web", timezone: deviceTimezone() }),
       });
       if (!res.ok) throw new ApiError(res.status, "auth_failed", "Could not sign in");
       const body = (await res.json()) as AuthResponse;
@@ -76,7 +100,7 @@ async function request<T>(path: string, init: RequestInit & { auth?: boolean } =
   const headers: Record<string, string> = { accept: "application/json", ...(init.headers as Record<string, string> | undefined) };
   if (init.body && !headers["content-type"]) headers["content-type"] = "application/json";
   if (init.auth !== false) headers.authorization = `Bearer ${await ensureSession()}`;
-  const res = await fetch(`${apiBaseUrl()}${path}`, { ...init, headers });
+  const res = await safeFetch(`${apiBaseUrl()}${path}`, { ...init, headers });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   const body = text ? (JSON.parse(text) as unknown) : null;

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Empty, Loading, Screen } from "@/components/ui";
 import { useMe, useRestaurantUpdates } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { colors, spacing } from "@/lib/theme";
 
 /** Grade changes, closures and research refreshes for the restaurants you track. */
@@ -12,6 +13,7 @@ export default function RestaurantUpdates() {
   const me = useMe();
   const updates = useRestaurantUpdates(me.data?.tier === "premium");
   const qc = useQueryClient();
+  const bottomPad = useBottomPad();
   useEffect(() => {
     if (updates.data?.unread) void api.restaurantUpdatesReadAll().then(() => qc.invalidateQueries({ queryKey: ["restaurant-updates"] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -21,7 +23,7 @@ export default function RestaurantUpdates() {
       <FlatList
         data={updates.data?.items ?? []}
         keyExtractor={(n) => n.id}
-        contentContainerStyle={{ padding: spacing(2), gap: spacing(1.5) }}
+        contentContainerStyle={{ padding: spacing(2), gap: spacing(1.5), paddingBottom: bottomPad }}
         ListEmptyComponent={updates.isLoading ? <Loading /> : <Empty title="No restaurant updates" body="You'll see health-grade changes and closures for restaurants you track here." />}
         renderItem={({ item }) => {
           const dir = (item.data as { direction?: string } | null)?.direction;

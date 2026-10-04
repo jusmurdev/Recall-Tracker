@@ -4,6 +4,7 @@ import { Alert as RNAlert, Linking, ScrollView, Text, View } from "react-native"
 import { Body, Button, Card, Collapsible, GradeBadge, Heading, Loading, PremiumTag, RecallRow, Screen, Small, Subtitle, Title, gradeColor } from "@/components/ui";
 import { gradeFriendly, whyAlert } from "@/lib/friendly";
 import { useDeleteWatchItem, useMe, useRestaurant, useWatchlist } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { api } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing } from "@/lib/theme";
@@ -13,6 +14,7 @@ export default function WatchItemDetail() {
   const list = useWatchlist();
   const me = useMe();
   const del = useDeleteWatchItem();
+  const bottomPad = useBottomPad();
   const item = list.data?.items.find((w) => w.id === id);
   const isRestaurant = item?.kind === "restaurant";
   const research = useRestaurant(id, isRestaurant && me.data?.tier === "premium");
@@ -35,7 +37,7 @@ export default function WatchItemDetail() {
   return (
     <Screen>
       <Stack.Screen options={{ title: "" }} />
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <Title>{item.label}</Title>
         {!isRestaurant ? (
           <Card>

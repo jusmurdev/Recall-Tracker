@@ -5,7 +5,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import type { MapRestaurant } from "@recall/shared";
 import { api } from "@/api/client";
-import { RestaurantMap } from "@/components/RestaurantMap";
+import { RestaurantMap, mapViewAvailable } from "@/components/RestaurantMap";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { Stars } from "@/components/Stars";
 import { Body, Button, Empty, GradeBadge, Loading, Small } from "@/components/ui";
 import { useLocationState } from "@/hooks/useLocationState";
@@ -24,12 +25,21 @@ export default function MapScreen() {
   const [radiusKm, setRadiusKm] = useState(1.5);
   const [selected, setSelected] = useState<string | null>(null);
   const listRef = useRef<FlatList<MapRestaurant>>(null);
+  const bottomPad = useBottomPad(spacing(2));
+  // Without a Google Maps key the Android map view throws; show the list on its own instead.
+  const mapOk = mapViewAvailable();
 
   useEffect(() => {
     if (center) return;
     if (loc.place) setCenter({ latitude: loc.place.latitude, longitude: loc.place.longitude });
     else if (loc.permission === "denied") setCenter(DEFAULT_CENTER);
   }, [loc.place, loc.permission, center]);
+  useEffect(() => {
+    // List-only mode has no map to pan: without a fix after a few seconds, show the default area.
+    if (mapOk || center) return;
+    const t = setTimeout(() => setCenter((c) => c ?? DEFAULT_CENTER), 6000);
+    return () => clearTimeout(t);
+  }, [mapOk, center]);
   useEffect(() => {
     if (!loc.place && loc.permission === "unknown") void loc.refresh({ ask: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,8 +64,13 @@ export default function MapScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View style={styles.mapWrap}>
-        {center ? (
+      <View style={[styles.mapWrap, !mapOk && styles.mapWrapCollapsed]}>
+        {!mapOk ? (
+          <View style={styles.noMap}>
+            <Ionicons name="map-outline" size={20} color={colors.muted} />
+            <Small style={{ flex: 1 }}>The map isn't available in this build, so here's the list of places near you instead.</Small>
+          </View>
+        ) : center ? (
           <RestaurantMap center={center} radiusKm={radiusKm} items={items} selectedId={selected} onSelect={select} onOpen={(id) => router.push(`/restaurant/${id}`)} onRegionSettled={onRegionSettled} />
         ) : (
           <View style={styles.center}>
@@ -64,15 +79,15 @@ export default function MapScreen() {
             {loc.permission === "denied" ? <Button title="Browse without location" variant="ghost" onPress={() => setCenter(DEFAULT_CENTER)} /> : null}
           </View>
         )}
-        {center ? (
+        {center && mapOk ? (
           <Pressable style={styles.locate} accessibilityRole="button" accessibilityLabel="Center on me" onPress={() => void loc.refresh({ ask: true }).then((p) => p && setCenter({ latitude: p.latitude, longitude: p.longitude }))}>
             <Ionicons name="locate" size={20} color={colors.accent} />
           </Pressable>
         ) : null}
       </View>
 
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+      <View style={[styles.sheet, !mapOk && { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }]}>
+        {mapOk ? <View style={styles.handle} /> : null}
         <View style={styles.sheetHeader}>
           <Body style={{ fontWeight: "700" }}>{q.isLoading ? "Looking around…" : items.length ? `${items.length} place${items.length === 1 ? "" : "s"} within ${radiusKm < 1 ? `${Math.round(radiusKm * 1000)} m` : `${radiusKm.toFixed(1)} km`}` : "Nothing here yet"}</Body>
           {q.data?.discovery.source ? <Small>Grades from {q.data.discovery.source === "nyc_dohmh" ? "NYC Health" : q.data.discovery.source === "chicago_cdph" ? "Chicago Public Health" : q.data.discovery.source}</Small> : <Small>Health grades are public data. Tracking is Premium.</Small>}
@@ -81,7 +96,7 @@ export default function MapScreen() {
           ref={listRef}
           data={items}
           keyExtractor={(i) => i.profileId}
-          contentContainerStyle={{ padding: spacing(2), gap: spacing(1), paddingBottom: spacing(4) }}
+          contentContainerStyle={{ padding: spacing(2), gap: spacing(1), paddingBottom: bottomPad }}
           onScrollToIndexFailed={() => undefined}
           ListEmptyComponent={q.isLoading ? null : <Empty icon="map-outline" title="No graded restaurants here yet" body={q.data?.discovery.source ? "Try zooming out." : "We don't have this area's inspection data yet. Add a restaurant and we'll research it."} />}
           renderItem={({ item }) => (
@@ -109,6 +124,8 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   mapWrap: { height: "46%", backgroundColor: colors.cardAlt },
+  mapWrapCollapsed: { height: undefined, paddingTop: spacing(1.5), paddingBottom: spacing(3.5) },
+  noMap: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: spacing(2), padding: spacing(1.5), backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   locate: { position: "absolute", right: 12, bottom: 12, width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   sheet: { flex: 1, backgroundColor: colors.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, marginTop: -18, overflow: "hidden" },

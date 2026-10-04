@@ -1,17 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAlerts } from "@/hooks/queries";
 import { colors } from "@/lib/theme";
 
 export default function TabsLayout() {
   const alerts = useAlerts();
+  const insets = useSafeAreaInsets();
   const unread = alerts.data?.unread ?? 0;
+  // Android draws edge-to-edge: the tab bar must grow by the system navigation bar's height
+  // or its icons end up underneath the back/home buttons.
+  const bottom = Math.max(insets.bottom, 6);
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border, height: 64, paddingTop: 6 },
+        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border, height: 58 + bottom, paddingTop: 6, paddingBottom: bottom },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,

@@ -5,6 +5,7 @@ import type { ConnectorProvider } from "@recall/shared";
 import { api, ApiError } from "@/api/client";
 import { Body, Button, Card, Empty, Input, Pill, Screen, Subtitle } from "@/components/ui";
 import { useConnectors, useImportPurchases, useMe } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { colors, spacing } from "@/lib/theme";
 
 export default function ConnectorsScreen() {
@@ -14,6 +15,7 @@ export default function ConnectorsScreen() {
   const providers = useQuery({ queryKey: ["providers"], queryFn: api.providers });
   const imp = useImportPurchases();
   const qc = useQueryClient();
+  const bottomPad = useBottomPad();
   const [provider, setProvider] = useState<ConnectorProvider>("instacart");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -46,7 +48,7 @@ export default function ConnectorsScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         <Card>
           <Subtitle>Connect a shopping account</Subtitle>
           <Body muted>We'll read what you've bought and watch all of it for recalls. Paste the connection link and access code from the retailer's app.</Body>

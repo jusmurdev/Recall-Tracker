@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Body, Button, Card, PremiumTag, Screen, Small, Title } from "@/components/ui";
 import { useMe } from "@/hooks/queries";
+import { useBottomPad } from "@/hooks/useBottomPad";
 import { colors, spacing } from "@/lib/theme";
 
 const FEATURES: Array<{ icon: React.ComponentProps<typeof Ionicons>["name"]; title: string; body: string }> = [
@@ -16,9 +17,10 @@ const FEATURES: Array<{ icon: React.ComponentProps<typeof Ionicons>["name"]; tit
 export default function PremiumScreen() {
   const me = useMe();
   const premium = me.data?.tier === "premium";
+  const bottomPad = useBottomPad();
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 8 }}>
           <PremiumTag />
           <Title>{premium ? "You're on Premium" : "Go further with Premium"}</Title>
@@ -42,7 +44,7 @@ export default function PremiumScreen() {
         ) : (
           <>
             <Button title="Start Premium" icon="sparkles" variant="premium" onPress={() => router.push("/premium/connectors")} />
-            <Small style={{ textAlign: "center" }}>Billed through the App Store. Cancel any time.</Small>
+            <Small style={{ textAlign: "center" }}>Billed through {Platform.OS === "android" ? "Google Play" : "the App Store"}. Cancel any time.</Small>
           </>
         )}
       </ScrollView>

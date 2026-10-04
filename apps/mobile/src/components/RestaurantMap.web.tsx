@@ -15,6 +15,11 @@ export interface RestaurantMapProps {
 
 const pinColor: Record<MapRestaurant["rating"]["level"], string> = { good: colors.success, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
 
+/** The web stand-in always renders. */
+export function mapViewAvailable(): boolean {
+  return true;
+}
+
 /** Web has no native map; draw a simple radar so the layout still makes sense. */
 export function RestaurantMap({ center, radiusKm, items, selectedId, onSelect }: RestaurantMapProps) {
   return (
