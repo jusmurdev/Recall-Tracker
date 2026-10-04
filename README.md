@@ -73,6 +73,17 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 
 See [docs/PREMIUM.md](docs/PREMIUM.md).
 
+## Screenshots
+
+<p>
+  <img src="docs/screenshots/01-recalls-feed.png" width="180" alt="Recall feed" />
+  <img src="docs/screenshots/07-restaurant-detail.png" width="180" alt="Restaurant with health grade" />
+  <img src="docs/screenshots/09-alerts.png" width="180" alt="Alerts" />
+  <img src="docs/screenshots/14-settings.png" width="180" alt="Settings" />
+</p>
+
+All screens, and how to regenerate them: [docs/screenshots](docs/screenshots/README.md).
+
 ## Quick start
 
 ```bash

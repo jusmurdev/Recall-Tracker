@@ -1,4 +1,9 @@
-/** Creates a demo user with a few watch items so the mobile app has data to show. */
+/**
+ * Seeds a demo premium user with a realistic set of data so the app has something to show:
+ * watch items of every kind, alerts (read/unread/resolved), a researched + graded restaurant
+ * with inspection history and a grade-drop notice, a connected account, and preferences.
+ * Run after `ingest:fixtures`. Prints the bearer token (set DEMO_TOKEN to make it stable).
+ */
 import { prisma } from "../db/client.js";
 import { randomToken, sha256 } from "../lib/crypto.js";
 import { findRecallsForItem, recordAlertsForItem } from "../matching/engine.js";
@@ -6,20 +11,70 @@ import { findRecallsForItem, recordAlertsForItem } from "../matching/engine.js";
 const token = process.env.DEMO_TOKEN ?? randomToken();
 const user = await prisma.user.upsert({
   where: { installId: "demo-install" },
-  create: { installId: "demo-install", tokenHash: sha256(token), tier: "premium", homeState: "CA" },
-  update: { tokenHash: sha256(token), tier: "premium" },
+  create: { installId: "demo-install", tokenHash: sha256(token), tier: "premium", homeState: "CA", lastKnownState: "NY", timezone: "America/Los_Angeles", quietHoursStart: 22, quietHoursEnd: 7 },
+  update: { tokenHash: sha256(token), tier: "premium", homeState: "CA", lastKnownState: "NY", timezone: "America/Los_Angeles", quietHoursStart: 22, quietHoursEnd: 7 },
 });
+await prisma.alert.deleteMany({ where: { userId: user.id } });
 await prisma.watchItem.deleteMany({ where: { userId: user.id } });
+await prisma.restaurantNotice.deleteMany({ where: { userId: user.id } });
+await prisma.connector.deleteMany({ where: { userId: user.id } });
+
 const items = [
-  { kind: "product" as const, label: "Jif peanut butter", terms: ["jif", "peanut butter"] },
+  { kind: "product" as const, label: "Jif peanut butter", terms: ["jif", "peanut butter"], context: "Costco, 2 jars in the pantry" },
   { kind: "product" as const, label: "Boar's Head deli meats", terms: ["boar's head", "liverwurst"] },
-  { kind: "upc" as const, label: "Stanley travel mug", terms: ["stanley"], upc: "041604302046" },
+  { kind: "upc" as const, label: "Stanley travel mug", terms: ["stanley"], upc: "041604302046", importedFrom: "amazon" },
+  { kind: "scan" as const, label: "Sunny Valley green juice", terms: ["sunny valley", "green juice"], ocrText: "SUNNY VALLEY\nCOLD-PRESSED GREEN JUICE\n12 FL OZ", context: "scanned at Whole Foods" },
   { kind: "product" as const, label: "Dog food (freeze-dried)", terms: ["freeze-dried", "dog food"], categories: ["veterinary" as const] },
+  { kind: "category" as const, label: "Critical food recalls near me", terms: [], categories: ["food" as const, "meat_poultry" as const], minSeverity: "critical" as const },
 ];
+const lite = { homeState: user.homeState, lastKnownState: user.lastKnownState };
 for (const it of items) {
   const wi = await prisma.watchItem.create({ data: { userId: user.id, ...it } });
-  const matches = await findRecallsForItem({ ...wi, homeState: user.homeState });
-  await recordAlertsForItem({ ...wi, homeState: user.homeState }, matches);
+  const matches = await findRecallsForItem({ ...wi, ...lite });
+  await recordAlertsForItem({ ...wi, ...lite }, matches);
 }
-console.log(JSON.stringify({ userId: user.id, token, watchItems: items.length }, null, 2));
+
+// Restaurant: shared profile with research, grade history and a recent grade drop.
+const profile = await prisma.restaurantProfile.upsert({
+  where: { key: "name:capitol deli|manhattan|NY" },
+  create: {
+    key: "name:capitol deli|manhattan|NY", name: "Capitol Deli", city: "Manhattan", state: "NY", website: "https://capitoldeli.example.com", latitude: 40.7074, longitude: -74.0113,
+    researchStatus: "ready", researchedAt: new Date(Date.now() - 12 * 86_400_000), researchCount: 1, cacheHits: 7,
+    summary: "A classic Financial District deli known for its liverwurst and pastrami. The menu names Boar's Head as its cold-cut brand and a job posting mentions Sysco deliveries. One 2026 inspection cited mice; the most recent re-inspection restored an A.",
+    supplierTerms: ["boar's head", "sysco"],
+    researchJson: { summary: "Classic deli.", suppliers: [{ name: "Boar's Head", kind: "brand", confidence: "confirmed", sourceUrl: "https://capitoldeli.example.com/menu" }, { name: "Sysco", kind: "distributor", confidence: "likely", sourceUrl: null }], riskSignals: [{ signal: "March 2026 inspection: evidence of mice (critical), grade C", sourceUrl: "https://a816-health.nyc.gov/ABCEatsRestaurants" }], sources: ["https://capitoldeli.example.com/menu", "https://a816-health.nyc.gov/ABCEatsRestaurants"] },
+    gradeSource: "nyc_dohmh", gradeExternalId: "41234567", currentGrade: "B", currentScore: 18, gradeScale: "nyc_points", lastInspectedAt: new Date("2026-10-01"), gradeCheckedAt: new Date(),
+  },
+  update: { currentGrade: "B", currentScore: 18, gradeCheckedAt: new Date(), lastInspectedAt: new Date("2026-10-01") },
+});
+await prisma.restaurantInspection.deleteMany({ where: { profileId: profile.id } });
+await prisma.restaurantInspection.createMany({
+  data: [
+    { profileId: profile.id, source: "nyc_dohmh", inspectedAt: new Date("2026-10-01"), grade: "B", score: 18, inspectionType: "Cycle Inspection / Initial Inspection", violations: [{ code: "02G", description: "Cold food item held above 41ºF (smoked fish and reduced oxygen packaged foods above 38ºF) except during necessary preparation.", critical: true }, { code: "10F", description: "Non-food contact surface improperly constructed. Unacceptable material used.", critical: false }, { code: "06D", description: "Food contact surface not properly washed, rinsed and sanitized after each use.", critical: true }], sourceUrl: "https://a816-health.nyc.gov/ABCEatsRestaurants/#!/Search?camis=41234567" },
+    { profileId: profile.id, source: "nyc_dohmh", inspectedAt: new Date("2026-04-14"), grade: "A", score: 9, inspectionType: "Cycle Inspection / Re-inspection", violations: [{ code: "10F", description: "Non-food contact surface improperly constructed.", critical: false }], sourceUrl: "https://a816-health.nyc.gov/ABCEatsRestaurants/#!/Search?camis=41234567" },
+    { profileId: profile.id, source: "nyc_dohmh", inspectedAt: new Date("2026-03-02"), grade: "C", score: 31, inspectionType: "Cycle Inspection / Initial Inspection", violations: [{ code: "04L", description: "Evidence of mice or live mice present in facility's food and/or non-food areas.", critical: true }, { code: "02B", description: "Hot food item not held at or above 140ºF.", critical: true }], sourceUrl: "https://a816-health.nyc.gov/ABCEatsRestaurants/#!/Search?camis=41234567" },
+  ],
+});
+const restaurant = await prisma.watchItem.create({
+  data: { userId: user.id, kind: "restaurant", label: "Capitol Deli", terms: ["capitol deli", "boar's head", "sysco"], restaurantName: "Capitol Deli", restaurantCity: "Manhattan", restaurantState: "NY", restaurantProfileId: profile.id, context: "Lunch spot near the office", researchSummary: profile.summary, researchUpdatedAt: profile.researchedAt, researchJson: profile.researchJson ?? undefined },
+});
+const rMatches = await findRecallsForItem({ ...restaurant, ...lite, terms: profile.supplierTerms });
+await recordAlertsForItem({ ...restaurant, ...lite }, rMatches);
+await prisma.restaurantNotice.create({ data: { userId: user.id, profileId: profile.id, kind: "grade_change", title: "Capitol Deli: health grade dropped to B", body: "B — some violations (was A) · inspected 2026-10-01.", data: { previousGrade: "A", currentGrade: "B", direction: "worse" }, pushedAt: new Date() } });
+
+// A second catalog restaurant nobody tracks yet (shows up in search / nearby).
+await prisma.restaurantProfile.upsert({
+  where: { key: "name:golden wok|chicago|IL" },
+  create: { key: "name:golden wok|chicago|IL", name: "Golden Wok", city: "Chicago", state: "IL", latitude: 41.9036, longitude: -87.6318, researchStatus: "ready", researchedAt: new Date(), summary: "Neighborhood Chinese restaurant.", supplierTerms: [], researchJson: { summary: "x", suppliers: [], riskSignals: [], sources: [] }, gradeSource: "chicago_cdph", currentGrade: "Pass w/ Conditions", gradeScale: "pass_fail", lastInspectedAt: new Date("2026-09-20"), gradeCheckedAt: new Date() },
+  update: {},
+});
+
+await prisma.connector.create({ data: { userId: user.id, provider: "instacart", displayName: "My Instacart", mcpUrl: "https://mcp.instacart.example.com/mcp", lastSyncAt: new Date(Date.now() - 3 * 86_400_000), lastSyncStatus: "ok" } });
+
+// Make the inbox look lived-in: one read, one resolved.
+const alerts = await prisma.alert.findMany({ where: { userId: user.id }, orderBy: { score: "desc" } });
+if (alerts[1]) await prisma.alert.update({ where: { id: alerts[1].id }, data: { readAt: new Date() } });
+if (alerts[2]) await prisma.alert.update({ where: { id: alerts[2].id }, data: { readAt: new Date(), resolvedAt: new Date(), resolvedAction: "returned" } });
+
+console.log(JSON.stringify({ userId: user.id, token, watchItems: items.length + 1, alerts: alerts.length, restaurantWatchItemId: restaurant.id }, null, 2));
 await prisma.$disconnect();
