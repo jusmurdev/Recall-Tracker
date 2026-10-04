@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanText, extractBrands, extractUpcs, parseCompactDate, parseDistributionStates, parseLooseDate } from "./normalize.js";
+import { cleanText, extractBrands, extractRemedy, extractUpcs, parseCompactDate, parseDistributionStates, parseLooseDate } from "./normalize.js";
 
 describe("parseDistributionStates", () => {
   it("detects nationwide", () => {
@@ -53,5 +53,20 @@ describe("dates and text", () => {
   });
   it("strips html", () => {
     expect(cleanText("<p>Hello&nbsp;<em>world</em></p>bye &amp; more")).toBe("Hello world\nbye & more");
+  });
+});
+
+describe("extractRemedy", () => {
+  it("picks the consumer-instruction sentences", () => {
+    const text =
+      "Acme is recalling its granola. The product was sold nationwide. Consumers who have purchased the product are urged to return it to the place of purchase for a full refund. Consumers with questions may contact the company at 800-555-0100. No illnesses have been reported.";
+    const r = extractRemedy(text)!;
+    expect(r).toContain("urged to return it to the place of purchase for a full refund");
+    expect(r).toContain("contact the company");
+    expect(r).not.toContain("sold nationwide");
+  });
+  it("returns null when nothing actionable is said", () => {
+    expect(extractRemedy("Mislabeled: package states 8 oz but contains 7 oz.")).toBeNull();
+    expect(extractRemedy("")).toBeNull();
   });
 });

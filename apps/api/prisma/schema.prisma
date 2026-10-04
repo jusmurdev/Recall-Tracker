@@ -66,6 +66,10 @@ model Recall {
   sourceUpdatedAt    DateTime?
   url                String?
   imageUrls          String[]
+  /// Lot numbers, best-by dates, model numbers: what a consumer compares against their package.
+  codeInfo           String?
+  /// What the agency/firm says to do (return for refund, discard, contact…).
+  remedy             String?
   /// sha256 of the normalised payload; lets ingestion skip untouched records.
   contentHash        String
   /// Original source payload for audit/debug and future re-normalisation.
@@ -132,6 +136,20 @@ model User {
   /// Most recent state the phone reported (travel). Only the state is stored, never coordinates.
   lastKnownState   String?
   lastLocationAt   DateTime?
+  /// --- Notification preferences ---
+  /// Lowest severity that triggers a push (alerts below it still land in the inbox).
+  pushMinSeverity  RecallSeverity @default(unknown)
+  /// Categories never pushed (still visible in the inbox).
+  mutedCategories  RecallCategory[] @default([])
+  /// Local hours [start, end) during which pushes are held; null = none. Wraps midnight.
+  quietHoursStart  Int?
+  quietHoursEnd    Int?
+  /// IANA timezone reported by the phone, for quiet hours and digests.
+  timezone         String?
+  /// One daily summary push instead of one per alert (critical alerts still go out immediately).
+  digestMode       Boolean   @default(false)
+  digestHour       Int       @default(9)
+  lastDigestAt     DateTime?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -162,6 +180,8 @@ enum WatchItemKind {
   upc
   scan
   restaurant
+  /// "Everything in these categories (at/above a severity, sold in my state)" — no product list needed.
+  category
 }
 
 model WatchItem {
@@ -175,6 +195,8 @@ model WatchItem {
   context           String?
   ocrText           String?
   categories        RecallCategory[] @default([])
+  /// For category subscriptions: ignore recalls below this severity.
+  minSeverity       RecallSeverity?
   restaurantName    String?
   restaurantCity    String?
   restaurantState   String?
@@ -262,6 +284,12 @@ model Alert {
   readAt      DateTime?
   pushedAt    DateTime?
   pushTicket  String?
+  /// User said "I don't have this" / "wrong match": hidden from the inbox.
+  dismissedAt   DateTime?
+  dismissReason String?
+  /// User dealt with it (discarded / returned / contacted the company).
+  resolvedAt    DateTime?
+  resolvedAction String?
 
   @@unique([userId, recallId])
   @@index([userId, createdAt(sort: Desc)])

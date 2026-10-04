@@ -1,4 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { QueryClient } from "@tanstack/react-query";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
@@ -11,7 +14,10 @@ import { colors } from "@/lib/theme";
 // Registers the background geofence task at bundle load (required by iOS).
 import "@/lib/geofence";
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
+// Cached responses survive restarts and no-signal moments: the last feed, watchlist and
+// alerts stay readable offline (gcTime must exceed the persister's maxAge to be restored).
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000, gcTime: 7 * 24 * 3600_000 } } });
+const persister = createAsyncStoragePersister({ storage: AsyncStorage, key: "recall-tracker-cache", throttleTime: 1000 });
 
 function Boot({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -29,7 +35,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
+        <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 3 * 24 * 3600_000, buster: "v1" }}>
           <Boot>
             <StatusBar style="light" />
             <Stack
@@ -45,12 +51,13 @@ export default function RootLayout() {
               <Stack.Screen name="alert/[id]" options={{ title: "Alert" }} />
               <Stack.Screen name="watch/new" options={{ title: "Watch an item", presentation: "modal" }} />
               <Stack.Screen name="watch/restaurant" options={{ title: "Track a restaurant", presentation: "modal" }} />
+              <Stack.Screen name="watch/subscribe" options={{ title: "Subscribe to categories", presentation: "modal" }} />
               <Stack.Screen name="watch/[id]" options={{ title: "Watch item" }} />
               <Stack.Screen name="premium/index" options={{ title: "Premium" }} />
               <Stack.Screen name="premium/connectors" options={{ title: "Connected accounts" }} />
             </Stack>
           </Boot>
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -12,6 +12,7 @@ const KIND_ICON: Record<WatchItem["kind"], React.ComponentProps<typeof Ionicons>
   upc: "barcode-outline",
   scan: "scan-outline",
   restaurant: "restaurant-outline",
+  category: "layers-outline",
 };
 
 export default function WatchlistScreen() {
@@ -31,6 +32,7 @@ export default function WatchlistScreen() {
         ListHeaderComponent={
           <View style={{ gap: spacing(1) }}>
             <Button title="Watch a product, brand or barcode" onPress={() => router.push("/watch/new")} />
+            <Button title="Subscribe to a whole category" variant="ghost" onPress={() => router.push("/watch/subscribe")} />
             <Pressable onPress={() => router.push(premium ? "/watch/restaurant" : "/premium")} style={styles.restaurantCta}>
               <Ionicons name="restaurant-outline" size={20} color={colors.premium} />
               <Text style={styles.restaurantText}>Track a restaurant's suppliers</Text>
@@ -45,7 +47,7 @@ export default function WatchlistScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>{item.label}</Text>
               <Text style={styles.meta} numberOfLines={1}>
-                {item.upc ? `UPC ${item.upc}` : item.terms.join(" · ")}
+                {item.kind === "category" ? `${item.categories.join(", ").replace(/_/g, " ")}${item.minSeverity && item.minSeverity !== "unknown" ? ` · ${item.minSeverity}+` : ""}` : item.upc ? `UPC ${item.upc}` : item.terms.join(" · ")}
                 {item.importedFrom ? ` · from ${item.importedFrom}` : ""}
               </Text>
               {item.kind === "restaurant" ? (

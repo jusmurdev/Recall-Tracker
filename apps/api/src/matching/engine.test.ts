@@ -85,6 +85,35 @@ describe("matching engine (integration)", () => {
     expect(await matchRecalls(recalls, { notify: false })).toBe(0);
   });
 
+  it("matches category subscriptions by category, severity and the user's states", async () => {
+    const tx = await prisma.user.create({ data: { installId: "sub-tx", tokenHash: sha256("sub-tx"), homeState: "TX" } });
+    const ny = await prisma.user.create({ data: { installId: "sub-ny", tokenHash: sha256("sub-ny"), homeState: "NY" } });
+    const any = await prisma.user.create({ data: { installId: "sub-any", tokenHash: sha256("sub-any") } });
+    await prisma.watchItem.createMany({
+      data: [
+        { userId: tx.id, kind: "category", label: "All food recalls near me", terms: [], categories: ["food"], minSeverity: "unknown" },
+        { userId: ny.id, kind: "category", label: "Critical food recalls near me", terms: [], categories: ["food"], minSeverity: "critical" },
+        { userId: any.id, kind: "category", label: "Meat & poultry", terms: [], categories: ["meat_poultry"], minSeverity: "high" },
+      ],
+    });
+    const recalls = await prisma.recall.findMany({ where: { sourceId: { in: ["F-1399-2026", "F-1456-2026", "PHA-10022026-01"] } } });
+    await matchRecalls(recalls, { notify: false });
+    const by = async (userId: string) => (await prisma.alert.findMany({ where: { userId }, include: { recall: true } })).map((a) => a.recall.sourceId).sort();
+    // TX: pecans (low, sold in TX/OK) + Jif (critical, nationwide). NY: only Jif (critical; pecans not sold in NY and too low anyway).
+    expect(await by(tx.id)).toEqual(["F-1399-2026", "F-1456-2026"]);
+    expect(await by(ny.id)).toEqual(["F-1456-2026"]);
+    // No state on file: distribution is not a filter. Public health alert is "high" meat_poultry.
+    expect(await by(any.id)).toEqual(["PHA-10022026-01"]);
+    const txAlert = await prisma.alert.findFirstOrThrow({ where: { userId: tx.id, recall: { sourceId: "F-1456-2026" } } });
+    expect(txAlert.reason).toBe("category_subscription");
+    expect(txAlert.explanation).toContain("Critical (Class I) food recall sold in TX");
+
+    // Direction B gives a new subscriber the recent list right away.
+    const probe = { id: "p", userId: ny.id, kind: "category" as const, label: "x", terms: [], upc: null, categories: ["food" as const], minSeverity: "high" as const, homeState: "CA" };
+    const instant = await findRecallsForItem(probe, { lookbackDays: 365 });
+    expect(instant.map((m) => m.recall.sourceId).sort()).toEqual(["F-1456-2026", "F-1460-2026"]); // juice (high) is sold in CA
+  });
+
   it("scores deterministically", () => {
     const recall = {
       productDescription: "Acme Foods Crunchy Granola",

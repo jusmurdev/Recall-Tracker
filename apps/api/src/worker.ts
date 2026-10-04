@@ -6,8 +6,9 @@ import { Worker } from "bullmq";
 import { env } from "./config/env.js";
 import { prisma } from "./db/client.js";
 import { ingestSource } from "./ingest/run.js";
-import { closeQueues, QUEUE_INGEST, QUEUE_PUSH, QUEUE_RECEIPTS, QUEUE_RESEARCH, redis, scheduleIngestion, type IngestJob, type PushJob, type ReceiptsJob, type ResearchJob } from "./jobs/queues.js";
+import { closeQueues, QUEUE_DIGEST, QUEUE_INGEST, QUEUE_PUSH, QUEUE_RECEIPTS, QUEUE_RESEARCH, redis, scheduleIngestion, type IngestJob, type PushJob, type ReceiptsJob, type ResearchJob } from "./jobs/queues.js";
 import { logger } from "./lib/logger.js";
+import { sendDigests } from "./notifications/digest.js";
 import { checkReceipts, sendPushForAlerts } from "./notifications/push.js";
 import { researchProfile } from "./premium/restaurantResearch.js";
 
@@ -20,6 +21,7 @@ async function main(): Promise<void> {
     new Worker<IngestJob>(QUEUE_INGEST, async (job) => ingestSource(job.data.source), { connection, concurrency: 1 }),
     new Worker<PushJob>(QUEUE_PUSH, async (job) => sendPushForAlerts(job.data.alertIds), { connection, concurrency: 4 }),
     new Worker<ReceiptsJob>(QUEUE_RECEIPTS, async (job) => checkReceipts(job.data.ticketIds), { connection, concurrency: 2 }),
+    new Worker(QUEUE_DIGEST, async () => sendDigests(), { connection, concurrency: 1 }),
     new Worker<ResearchJob>(
       QUEUE_RESEARCH,
       async (job) => {

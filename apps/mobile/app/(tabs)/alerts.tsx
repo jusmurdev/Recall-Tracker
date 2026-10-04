@@ -41,7 +41,8 @@ export default function AlertsScreen() {
               footer={
                 <View style={styles.footer}>
                   {!item.readAt ? <View style={styles.dot} /> : null}
-                  <Text style={styles.why} numberOfLines={2}>
+                  <Text style={[styles.why, item.resolvedAt && { color: colors.muted }]} numberOfLines={2}>
+                    {item.resolvedAt ? "✓ Handled · " : ""}
                     {item.watchItemLabel ? `${item.watchItemLabel} · ` : ""}
                     {item.explanation}
                   </Text>

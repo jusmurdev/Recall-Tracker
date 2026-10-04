@@ -8,7 +8,7 @@
  * fall under CPSC rather than FDA.
  */
 import { fetchJson } from "../../lib/http.js";
-import { cleanText, extractUpcs, parseLooseDate, toIsoDate, truncate } from "../normalize.js";
+import { cleanText, extractRemedy, extractUpcs, parseLooseDate, toIsoDate, truncate } from "../normalize.js";
 import type { FetchWindow, NormalizedRecall, SourceAdapter } from "../types.js";
 import type { RecallSeverity } from "@recall/shared";
 
@@ -58,6 +58,9 @@ export function normalizeCpscRecord(rec: CpscRecord): NormalizedRecall {
   const hazards = (rec.Hazards ?? []).map((h) => cleanText(h.Name ?? "")).filter(Boolean);
   const injuries = (rec.Injuries ?? []).map((i) => cleanText(i.Name ?? "")).filter(Boolean);
   const retailers = (rec.Retailers ?? []).map((r) => cleanText(r.Name ?? "")).filter(Boolean);
+  const remedies = (rec.Remedies ?? []).map((r) => cleanText(r.Name ?? "")).filter(Boolean);
+  const models = (rec.Products ?? []).map((p) => cleanText(p.Model ?? "")).filter(Boolean);
+  const contact = cleanText(rec.ConsumerContact);
   const manufacturers = (rec.Manufacturers ?? []).map((m) => cleanText(m.Name ?? "")).filter(Boolean);
   const upcs = new Set<string>();
   for (const u of rec.ProductUPCs ?? []) {
@@ -88,6 +91,8 @@ export function normalizeCpscRecord(rec: CpscRecord): NormalizedRecall {
     sourceUpdatedAt: published,
     url: rec.URL ?? null,
     imageUrls: (rec.Images ?? []).map((i) => i.URL ?? "").filter(Boolean).slice(0, 6),
+    codeInfo: models.length ? `Model${models.length > 1 ? "s" : ""}: ${models.join("; ")}` : null,
+    remedy: [remedies.length ? `Remedy: ${remedies.join(", ")}.` : "", extractRemedy(desc) ?? "Consumers should immediately stop using the product.", contact ? `Contact: ${contact}.` : ""].filter(Boolean).join(" "),
     raw: rec,
   };
 }

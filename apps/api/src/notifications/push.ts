@@ -2,7 +2,8 @@ import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk
 import { env } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
-import { enqueueReceipts } from "../jobs/queues.js";
+import { enqueuePushForAlerts, enqueueReceipts } from "../jobs/queues.js";
+import { decidePush } from "./prefs.js";
 
 let expo: Expo | null = null;
 function client(): Expo {
@@ -29,7 +30,7 @@ export interface PushResult {
  */
 export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Expo, "sendPushNotificationsAsync"> = client()): Promise<PushResult> {
   const alerts = await prisma.alert.findMany({
-    where: { id: { in: alertIds }, pushedAt: null },
+    where: { id: { in: alertIds }, pushedAt: null, dismissedAt: null },
     include: {
       recall: { select: { title: true, severity: true, category: true, company: true } },
       watchItem: { select: { label: true } },
@@ -39,7 +40,21 @@ export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Exp
 
   const messages: Array<ExpoPushMessage & { alertId: string; deviceId: string }> = [];
   let skipped = 0;
+  const delayed = new Map<number, string[]>();
   for (const alert of alerts) {
+    // Respect the user's notification preferences.
+    const decision = decidePush(alert.user, alert.recall);
+    if (!decision.send) {
+      if (decision.reason === "quiet_hours") {
+        const bucket = Math.ceil(decision.delayMs / 60_000) * 60_000;
+        delayed.set(bucket, [...(delayed.get(bucket) ?? []), alert.id]);
+      } else if (decision.reason !== "digest") {
+        // Final: mark as handled so it is never retried. Digest alerts stay pushedAt=null for the digest job.
+        await prisma.alert.update({ where: { id: alert.id }, data: { pushedAt: new Date(), pushTicket: `skipped:${decision.reason}` } });
+      }
+      skipped += 1;
+      continue;
+    }
     if (!alert.user.devices.length) {
       skipped += 1;
       continue;
@@ -63,6 +78,7 @@ export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Exp
       });
     }
   }
+  for (const [delayMs, ids] of delayed) await enqueuePushForAlerts(ids, { delayMs });
   if (!messages.length) return { sent: 0, skipped, invalidated: 0 };
 
   let sent = 0;

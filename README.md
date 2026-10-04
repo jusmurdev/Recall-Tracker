@@ -41,6 +41,14 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 - Alert inbox with "why you got this" explanations and confidence.
 - Location-aware ranking: the phone resolves its state on-device and sends only that, so
   recalls sold where you live or currently are rank higher and the feed has a "Near me" filter.
+- Category subscriptions: "every Class I food recall sold in my state" with no product list.
+- "Check your package" lot/date/model codes and "What to do" remedy text on every recall.
+- Alert actions: I handled it (threw away / returned / contacted / checked, not affected),
+  I don't have this, wrong match. Dismissed alerts never push.
+- Notification preferences: minimum severity, muted categories, quiet hours (in your time
+  zone), daily digest at a chosen hour. Critical recalls always push immediately.
+- Share any recall, app-icon badge with unread count, offline cache of the last feed,
+  watchlist and alerts, and one-tap "Delete my data".
 
 **Premium**
 - **Connected accounts (MCP).** Users connect grocery / delivery / shopping accounts that

@@ -135,6 +135,26 @@ export function extractBrands(text: string | null | undefined): string[] {
   return [...out].filter((b) => b.length >= 2 && b.length <= 60 && !/^(the|and|lot|upc|best by|use by)$/i.test(b));
 }
 
+/**
+ * Pull the "what consumers should do" guidance out of recall prose. Agencies phrase it
+ * consistently ("Consumers who have purchased … are urged to return it to the place of
+ * purchase for a full refund", "should not consume", "throw away", "contact the company at…").
+ */
+export function extractRemedy(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const sentences = cleanText(text)
+    .split(/(?<=[.!?])\s+(?=[A-Z"“])/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 15);
+  const cues = /\b(should (not|be)|are urged|is urged|urged to|advised to|should (return|discard|throw|dispose|stop|contact|immediately|not)|do not (consume|eat|use)|throw (it )?away|discard|return (it|them|the product|to the (place|store))|full refund|refund|contact (the )?(company|firm|customer)|destroy|stop using)\b/i;
+  const picked: string[] = [];
+  for (const s of sentences) {
+    if (cues.test(s) && !/^(the )?(fda|fsis|cpsc) (has|have) not/i.test(s)) picked.push(s);
+    if (picked.join(" ").length > 500) break;
+  }
+  return picked.length ? truncate(picked.join(" "), 600) : null;
+}
+
 export function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
 }
@@ -156,6 +176,8 @@ export function contentHash(r: NormalizedRecall): string {
     recallDate: r.recallDate?.toISOString() ?? null,
     url: r.url,
     imageUrls: r.imageUrls,
+    codeInfo: r.codeInfo,
+    remedy: r.remedy,
   });
   return createHash("sha256").update(payload).digest("hex");
 }

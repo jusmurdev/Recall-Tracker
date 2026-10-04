@@ -45,7 +45,10 @@ user in one pass and a push goes out within minutes of publication.
   and return `NormalizedRecall[]`. They know the source's quirks (openFDA's `NOT_FOUND` 404
   for empty windows, FSIS Spanish duplicates, CPSC's UPC array) and nothing else.
 - **Normalisation** (`normalize.ts`) is shared: UPC extraction, state parsing, brand
-  heuristics, HTML stripping, date parsing, content hashing.
+  heuristics, HTML stripping, date parsing, content hashing, and `extractRemedy()` which
+  pulls the "consumers should return / discard / contact" sentences out of agency prose.
+  Each adapter also fills `codeInfo` (FDA `code_info`, FSIS lot/date phrases, CPSC models)
+  so the app can show "check your package".
 - **Runner** (`run.ts`) reads the per-source watermark, fetches `[watermark − 3d, now]`,
   upserts by `(source, sourceId)`, skips rows whose hash is unchanged, and hands new or
   escalated recalls to the matching engine. Every run is logged in `IngestRun`.
@@ -102,10 +105,35 @@ Location is a phone-side capability with a deliberately thin server footprint:
   enter, the task fetches that restaurant's current supplier recalls and posts a local
   notification if any exist. Requires "Always" permission on iOS; toggled in Settings.
 
-## Notifications (`notifications/push.ts`)
+## Notifications (`notifications/push.ts`, `prefs.ts`, `digest.ts`)
 
 Expo push in chunks of 100, tickets stored on the alert, `DeviceNotRegistered` disables the
 device, receipts checked 15 minutes later. Android channels: `recalls` and `critical-recalls`.
+
+Before sending, `decidePush()` applies the user's preferences in this order:
+1. below `pushMinSeverity` or in `mutedCategories` → never pushed (marked with a
+   `skipped:` ticket so it is not retried; still in the inbox);
+2. `digestMode` → held for the daily digest, except critical recalls;
+3. quiet hours (local time via `timezone`, window may wrap midnight) → re-queued with a
+   delay until the window ends, except critical recalls.
+
+`sendDigests()` runs hourly from the worker and sends one summary push per user whose local
+hour equals `digestHour`, covering every un-pushed, un-dismissed alert; at most once per 20h.
+Dismissed alerts are never pushed.
+
+## Alert lifecycle
+
+`Alert` rows carry `readAt`, `dismissedAt` + `dismissReason` (`dont_have`, `false_match`,
+`not_interested`) and `resolvedAt` + `resolvedAction` (`discarded`, `returned`,
+`contacted`, `checked_not_affected`). The inbox hides dismissed alerts by default; the
+`(userId, recallId)` uniqueness means a dismissed recall will not come back for that user.
+`false_match` dismissals are the signal to tune matching heuristics against.
+
+## Category subscriptions
+
+`WatchItem.kind = category` with `categories[]` and `minSeverity` matches recalls by
+category and severity instead of text, and only those distributed nationwide or in the user's
+home / current state when a state is known. Scored 0.4–0.8 by severity so critical ones push.
 
 ## API (`apps/api/src/api`)
 

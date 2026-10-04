@@ -1,6 +1,10 @@
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert as RNAlert, Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { CATEGORY_LABEL, type RecallCategory, type RecallSeverity } from "@recall/shared";
+import { Pill } from "@/components/ui";
+import { useUpdatePreferences } from "@/hooks/queries";
+import { setToken } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Body, Button, Card, PremiumTag, Screen, Subtitle } from "@/components/ui";
@@ -24,6 +28,33 @@ export default function SettingsScreen() {
     void isGeofencingActive().then(setGeofences);
   }, []);
   const trackedRestaurants = (list.data?.items ?? []).filter((w) => w.kind === "restaurant" && w.restaurant?.latitude != null).length;
+  const prefs = me.data?.preferences;
+  const update = useUpdatePreferences();
+  const setPref = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
+  const SEV: Array<{ v: RecallSeverity; label: string }> = [
+    { v: "unknown", label: "All" },
+    { v: "low", label: "Class III+" },
+    { v: "high", label: "Class II+" },
+    { v: "critical", label: "Class I only" },
+  ];
+  const CATS: RecallCategory[] = ["food", "meat_poultry", "dietary_supplement", "veterinary", "cosmetic", "drug", "medical_device", "consumer_product"];
+  const HOURS = Array.from({ length: 24 }, (_, h) => h);
+  const fmtHour = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
+
+  const deleteAccount = () =>
+    RNAlert.alert("Delete your data?", "This removes your watchlist, alerts, connected accounts and device registrations. It cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete everything",
+        style: "destructive",
+        onPress: async () => {
+          await api.deleteAccount();
+          await setToken("");
+          qc.clear();
+          RNAlert.alert("Deleted", "Your data has been removed. The app will start fresh.");
+        },
+      },
+    ]);
 
   const toggleGeofences = async (on: boolean) => {
     setGeoBusy(true);
@@ -70,6 +101,72 @@ export default function SettingsScreen() {
             />
           </View>
           {loc.permission === "denied" ? <Button title="Open Settings to allow location" variant="ghost" onPress={() => void Linking.openSettings()} /> : null}
+        </Card>
+
+        <Card>
+          <Subtitle>Notifications</Subtitle>
+          {prefs ? (
+            <>
+              <Body muted>Push me about</Body>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {SEV.map((s) => (
+                  <Pill key={s.v} label={s.label} active={prefs.pushMinSeverity === s.v} onPress={() => setPref({ pushMinSeverity: s.v })} />
+                ))}
+              </ScrollView>
+              <Body muted>Mute categories (still shown in the inbox)</Body>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {CATS.map((c) => (
+                  <Pill
+                    key={c}
+                    label={CATEGORY_LABEL[c]}
+                    active={prefs.mutedCategories.includes(c)}
+                    onPress={() => setPref({ mutedCategories: prefs.mutedCategories.includes(c) ? prefs.mutedCategories.filter((x) => x !== c) : [...prefs.mutedCategories, c] })}
+                  />
+                ))}
+              </ScrollView>
+              <View style={styles.switchRow}>
+                <Body style={{ flex: 1 }}>Daily digest instead of one push per alert (critical recalls still arrive immediately)</Body>
+                <Switch value={prefs.digestMode} onValueChange={(v) => setPref({ digestMode: v })} trackColor={{ true: colors.accent }} />
+              </View>
+              {prefs.digestMode ? (
+                <>
+                  <Body muted>Digest time</Body>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {[7, 8, 9, 12, 18, 20].map((h) => (
+                      <Pill key={h} label={fmtHour(h)} active={prefs.digestHour === h} onPress={() => setPref({ digestHour: h })} />
+                    ))}
+                  </ScrollView>
+                </>
+              ) : null}
+              <View style={styles.switchRow}>
+                <Body style={{ flex: 1 }}>Quiet hours (non-critical pushes wait until the window ends)</Body>
+                <Switch
+                  value={prefs.quietHoursStart != null}
+                  onValueChange={(v) => setPref(v ? { quietHoursStart: 22, quietHoursEnd: 7 } : { quietHoursStart: null, quietHoursEnd: null })}
+                  trackColor={{ true: colors.accent }}
+                />
+              </View>
+              {prefs.quietHoursStart != null ? (
+                <>
+                  <Body muted>From</Body>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {HOURS.map((h) => (
+                      <Pill key={h} label={fmtHour(h)} active={prefs.quietHoursStart === h} onPress={() => setPref({ quietHoursStart: h, quietHoursEnd: prefs.quietHoursEnd ?? 7 })} />
+                    ))}
+                  </ScrollView>
+                  <Body muted>Until</Body>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    {HOURS.map((h) => (
+                      <Pill key={h} label={fmtHour(h)} active={prefs.quietHoursEnd === h} onPress={() => setPref({ quietHoursStart: prefs.quietHoursStart ?? 22, quietHoursEnd: h })} />
+                    ))}
+                  </ScrollView>
+                </>
+              ) : null}
+              <Body muted style={{ fontSize: 12 }}>Times use {prefs.timezone ?? "your phone's time zone"}.</Body>
+            </>
+          ) : (
+            <Body muted>Loading…</Body>
+          )}
         </Card>
 
         {premium && geofenceSupported() ? (
@@ -122,6 +219,12 @@ export default function SettingsScreen() {
           <Body muted style={{ fontSize: 12 }}>
             API: {apiBaseUrl()} · User {me.data?.id ?? "…"}
           </Body>
+        </Card>
+
+        <Card>
+          <Subtitle>Your data</Subtitle>
+          <Body muted>We store your watchlist, alerts, connected accounts and your state (never precise location). Delete it all at any time.</Body>
+          <Button title="Delete my data" variant="danger" onPress={deleteAccount} />
         </Card>
       </ScrollView>
     </Screen>

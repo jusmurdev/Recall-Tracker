@@ -22,6 +22,8 @@ export function serializeRecall(r: DbRecall): Recall {
     updatedAt: r.updatedAt.toISOString(),
     url: r.url,
     imageUrls: r.imageUrls,
+    codeInfo: r.codeInfo,
+    remedy: r.remedy,
   };
 }
 
@@ -38,6 +40,7 @@ export function serializeWatchItem(w: WatchItemWithProfile): WatchItem {
     context: w.context ?? undefined,
     ocrText: w.ocrText ?? undefined,
     categories: w.categories,
+    minSeverity: w.minSeverity ?? undefined,
     restaurant: w.restaurantName
       ? {
           name: w.restaurantName,
@@ -67,6 +70,10 @@ export function serializeAlert(a: DbAlert & { recall: DbRecall; watchItem: { lab
     createdAt: a.createdAt.toISOString(),
     readAt: a.readAt?.toISOString() ?? null,
     pushedAt: a.pushedAt?.toISOString() ?? null,
+    dismissedAt: a.dismissedAt?.toISOString() ?? null,
+    dismissReason: (a.dismissReason as Alert["dismissReason"]) ?? null,
+    resolvedAt: a.resolvedAt?.toISOString() ?? null,
+    resolvedAction: (a.resolvedAction as Alert["resolvedAction"]) ?? null,
   };
 }
 

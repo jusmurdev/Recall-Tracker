@@ -67,7 +67,7 @@ export function SeverityBadge({ severity }: { severity: RecallSeverity }) {
 
 export function Pill({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.pill, active && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: !!active }} accessibilityLabel={label} onPress={onPress} style={[styles.pill, active && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
       <Text style={[styles.pillText, active && { color: colors.bg, fontWeight: "700" }]}>{label}</Text>
     </Pressable>
   );
@@ -84,7 +84,7 @@ export function PremiumTag() {
 export function RecallRow({ recall, onPress, footer }: { recall: Recall; onPress: () => void; footer?: React.ReactNode }) {
   const date = new Date(recall.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${recall.severity} recall: ${recall.title}`} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
       <View style={[styles.stripe, { backgroundColor: severityColor[recall.severity] }]} />
       <View style={{ flex: 1, gap: 4 }}>
         <Text style={styles.rowTitle} numberOfLines={2}>

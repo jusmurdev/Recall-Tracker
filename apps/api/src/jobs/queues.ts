@@ -57,12 +57,15 @@ const DEFAULT_OPTS: JobsOptions = {
 };
 
 /** Fan pushes out in batches of 100 (Expo's max per request). */
-export async function enqueuePushForAlerts(alertIds: string[]): Promise<void> {
+export async function enqueuePushForAlerts(alertIds: string[], opts: { delayMs?: number } = {}): Promise<void> {
   if (process.env.DISABLE_QUEUES === "1") return;
   for (let i = 0; i < alertIds.length; i += 100) {
-    await pushQueue().add("push", { alertIds: alertIds.slice(i, i + 100) }, DEFAULT_OPTS);
+    await pushQueue().add("push", { alertIds: alertIds.slice(i, i + 100) }, { ...DEFAULT_OPTS, ...(opts.delayMs ? { delay: opts.delayMs } : {}) });
   }
 }
+
+export const QUEUE_DIGEST = "digest";
+export const digestQueue = (): Queue<Record<string, never>> => queue<Record<string, never>>(QUEUE_DIGEST);
 
 /**
  * One job per profile at a time: the jobId dedupes concurrent requests from several users
@@ -92,6 +95,8 @@ export async function scheduleIngestion(): Promise<void> {
     await ingestQueue().upsertJobScheduler(`ingest-${source}`, { pattern, tz: "UTC" }, { name: `ingest-${source}`, data: { source }, opts: { attempts: 1 } });
     logger.info({ source, pattern }, "ingest schedule registered");
   }
+  // Hourly: send daily digests to users whose local digest hour has arrived.
+  await digestQueue().upsertJobScheduler("digest-hourly", { pattern: "7 * * * *", tz: "UTC" }, { name: "digest", data: {}, opts: { attempts: 1 } });
 }
 
 export async function closeQueues(): Promise<void> {

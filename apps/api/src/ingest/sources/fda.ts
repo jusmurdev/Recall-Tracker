@@ -11,7 +11,7 @@
  */
 import { env } from "../../config/env.js";
 import { fetchJson } from "../../lib/http.js";
-import { cleanText, contentHash, extractBrands, extractUpcs, parseCompactDate, parseDistributionStates, toYyyymmdd, truncate } from "../normalize.js";
+import { cleanText, contentHash, extractBrands, extractRemedy, extractUpcs, parseCompactDate, parseDistributionStates, toYyyymmdd, truncate } from "../normalize.js";
 import type { FetchWindow, NormalizedRecall, SourceAdapter } from "../types.js";
 import type { RecallCategory, RecallSeverity, RecallStatus } from "@recall/shared";
 
@@ -126,6 +126,14 @@ export function normalizeFdaRecord(rec: OpenFdaEnforcementRecord, endpoint: Open
       ? `https://www.accessdata.fda.gov/scripts/ires/index.cfm?Product=${encodeURIComponent(rec.recall_number)}`
       : null,
     imageUrls: [],
+    codeInfo: cleanText(codeInfo) || null,
+    // Enforcement reports rarely carry consumer instructions; derive a sensible default from
+    // the status and classification so the app can always show "what to do".
+    remedy:
+      extractRemedy(`${product} ${reason}`) ??
+      (rec.status?.toLowerCase() === "ongoing"
+        ? "Check the lot/date codes on your package. If they match, do not use the product; return it to the place of purchase for a refund or discard it, and contact the company with questions."
+        : null),
     raw: rec,
   };
   return r;

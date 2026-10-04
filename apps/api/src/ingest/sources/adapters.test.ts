@@ -44,6 +44,8 @@ describe("FDA adapter", () => {
     const pet = items.find((i) => i.sourceId === "F-1471-2026")!;
     expect(pet.category).toBe("veterinary");
     expect(items.find((i) => i.sourceId === "F-1399-2026")!.status).toBe("completed");
+    expect(jif.codeInfo).toContain("Lot codes 1274425");
+    expect(jif.remedy).toMatch(/return it to the place of purchase|do not use/i);
   });
 });
 
@@ -62,6 +64,8 @@ describe("FSIS adapter", () => {
     expect(bh.upcs).toEqual(["042421055051"]);
     expect(bh.url).toBe("https://www.fsis.usda.gov/recalls-alerts/boars-head-provisions-co-recalls-ready-eat-liverwurst-products-due-possible-listeria");
     expect(bh.summary).not.toContain("<p>");
+    expect(bh.codeInfo).toMatch(/sell-by dates 10\/15\/2026/i);
+    expect(bh.remedy).toMatch(/urged not to consume/i);
     const pha = items.find((i) => i.sourceId === "PHA-10022026-01")!;
     expect(pha.title).toMatch(/Public Health Alert/);
     expect(pha.severity).toBe("high");
@@ -86,5 +90,8 @@ describe("CPSC adapter", () => {
     expect(mug.imageUrls).toHaveLength(1);
     expect(mug.summary).toContain("Sold at: Amazon.com, Target");
     expect(mug.reason).toMatch(/^Burn/);
+    expect(mug.codeInfo).toBe("Model: 20-01437, 20-02211");
+    expect(mug.remedy).toContain("Remedy: Replace.");
+    expect(mug.remedy).toContain("Contact: Stanley toll-free");
   });
 });

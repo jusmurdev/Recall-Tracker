@@ -8,7 +8,7 @@
  * recall date because the server-side filters are taxonomy-id based and undocumented.
  */
 import { fetchJson } from "../../lib/http.js";
-import { cleanText, extractBrands, extractUpcs, parseDistributionStates, parseLooseDate, truncate } from "../normalize.js";
+import { cleanText, extractBrands, extractRemedy, extractUpcs, parseDistributionStates, parseLooseDate, truncate } from "../normalize.js";
 import type { FetchWindow, NormalizedRecall, SourceAdapter } from "../types.js";
 import type { RecallSeverity, RecallStatus } from "@recall/shared";
 
@@ -102,8 +102,21 @@ export function normalizeFsisRecord(rec: FsisRecord): NormalizedRecall {
     sourceUpdatedAt: modified,
     url,
     imageUrls: [],
+    codeInfo: extractCodes(products) || null,
+    remedy:
+      extractRemedy(summary) ??
+      "FSIS is concerned that some product may be in consumers' refrigerators or freezers. Consumers who have purchased these products are urged not to consume them. These products should be thrown away or returned to the place of purchase.",
     raw: rec,
   };
+}
+
+/** Lot codes, establishment numbers, and date ranges embedded in FSIS product descriptions. */
+function extractCodes(products: string): string {
+  const hits = new Set<string>();
+  for (const m of products.matchAll(/\b(?:lot(?: code| number)?s?|est\.?|p-?|use[- ]by|sell[- ]by|best[- ](?:by|before)|pack(?:ed)? (?:on|date))\s*[:#]?\s*([A-Za-z0-9/\-–,. ]{3,60}?)(?=[.;)]|$| and | with | or )/gi)) {
+    hits.add(cleanText(m[0]!));
+  }
+  return [...hits].slice(0, 12).join("; ");
 }
 
 export class FsisAdapter implements SourceAdapter {

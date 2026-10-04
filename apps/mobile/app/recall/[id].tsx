@@ -1,6 +1,7 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import React from "react";
-import { Linking, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Linking, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { CATEGORY_LABEL } from "@recall/shared";
 import { Body, Button, Card, Loading, Screen, SeverityBadge, Subtitle, Title } from "@/components/ui";
 import { useRecall } from "@/hooks/queries";
@@ -17,9 +18,19 @@ export default function RecallDetail() {
     );
   }
   const r = q.data;
+  const share = () =>
+    void Share.share({
+      title: r.title,
+      message: `${r.title}\n${r.reason}\n${r.url ?? ""}\n\nvia Recall Tracker: recalltracker://recall/${r.id}`,
+    });
   return (
     <Screen>
-      <Stack.Screen options={{ title: r.source }} />
+      <Stack.Screen
+        options={{
+          title: r.source,
+          headerRight: () => <Ionicons name="share-outline" size={22} color={colors.text} onPress={share} accessibilityLabel="Share this recall" />,
+        }}
+      />
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
         <View style={{ gap: 8 }}>
           <SeverityBadge severity={r.severity} />
@@ -34,6 +45,21 @@ export default function RecallDetail() {
           <Subtitle>Why it was recalled</Subtitle>
           <Body>{r.reason || r.summary}</Body>
         </Card>
+
+        {r.codeInfo ? (
+          <Card style={{ borderColor: colors.high }}>
+            <Subtitle>Check your package</Subtitle>
+            <Body>{r.codeInfo}</Body>
+            <Body muted>Compare the lot, date or model code printed on your item. Only matching codes are affected.</Body>
+          </Card>
+        ) : null}
+
+        {r.remedy ? (
+          <Card style={{ borderColor: colors.accent }}>
+            <Subtitle>What to do</Subtitle>
+            <Body>{r.remedy}</Body>
+          </Card>
+        ) : null}
 
         <Card>
           <Subtitle>Product</Subtitle>
@@ -56,6 +82,7 @@ export default function RecallDetail() {
         ) : null}
 
         {r.url ? <Button title={`Open on ${r.source === "FSIS" ? "fsis.usda.gov" : r.source === "CPSC" ? "cpsc.gov" : "fda.gov"}`} onPress={() => void Linking.openURL(r.url!)} /> : null}
+        <Button title="Share" variant="ghost" onPress={share} />
         <Text style={styles.footnote}>
           Source record {r.source} {r.sourceId}. Last updated {new Date(r.updatedAt).toLocaleString()}.
         </Text>

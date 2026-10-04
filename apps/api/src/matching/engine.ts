@@ -29,6 +29,7 @@ export function escapeLike(s: string): string {
 
 type WatchItemLite = Pick<WatchItem, "id" | "userId" | "kind" | "label" | "terms" | "upc" | "categories"> & {
   homeState: string | null;
+  minSeverity?: WatchItem["minSeverity"];
   /** Where the phone last reported being (travel); treated like a second home state. */
   lastKnownState?: string | null;
 };
@@ -173,6 +174,36 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
     }
   }
 
+  // Category subscriptions ("all critical food recalls sold in my state"): no terms, so they
+  // are matched by category + severity + distribution instead of text.
+  for (const recall of recalls) {
+    const subs = await prisma.$queryRaw<Array<{ id: string; userId: string; label: string; homeState: string | null; lastKnownState: string | null }>>(Prisma.sql`
+      SELECT wi.id, wi."userId", wi.label, u."homeState", u."lastKnownState"
+      FROM "WatchItem" wi JOIN "User" u ON u.id = wi."userId"
+      WHERE wi.kind = 'category'
+        AND ${recall.category}::"RecallCategory" = ANY(wi.categories)
+        AND COALESCE(wi."minSeverity"::text, 'unknown') IN (${Prisma.join(severitiesAtOrBelow(recall.severity))})
+    `);
+    if (!subs.length) continue;
+    const data = subs
+      .map((sub) => {
+        const states = [sub.homeState, sub.lastKnownState].filter((x): x is string => !!x);
+        const local = !recall.distributionStates.length || recall.distributionStates.includes("US") || states.some((st) => recall.distributionStates.includes(st));
+        // Subscriptions are about "near me": skip recalls clearly sold elsewhere when we know where the user is.
+        if (states.length && !local) return null;
+        const score = round(Math.min(1, (recall.severity === "critical" ? 0.7 : recall.severity === "high" ? 0.55 : 0.4) + (states.length && local ? 0.1 : 0)));
+        return { userId: sub.userId, recallId: recall.id, watchItemId: sub.id, reason: "category_subscription" as const, score, explanation: `${sub.label}: ${severityLabel(recall.severity)} ${categoryLabel(recall.category)} recall${local && states.length ? ` sold in ${states.join("/")}` : ""}.` };
+      })
+      .filter((d): d is NonNullable<typeof d> => !!d);
+    if (!data.length) continue;
+    const res = await prisma.alert.createMany({ data, skipDuplicates: true });
+    created += res.count;
+    if (res.count) {
+      const fresh = await prisma.alert.findMany({ where: { recallId: recall.id, userId: { in: data.map((d) => d.userId) }, pushedAt: null, score: { gte: PUSH_THRESHOLD } }, select: { id: true } });
+      toPush.push(...fresh.map((a) => a.id));
+    }
+  }
+
   if (notify && toPush.length) {
     await enqueuePushForAlerts(toPush).catch((err) => logger.error({ err }, "failed to enqueue push jobs"));
   }
@@ -191,6 +222,7 @@ export interface RecallMatch {
 export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDays?: number; limit?: number } = {}): Promise<RecallMatch[]> {
   const lookback = new Date(Date.now() - (opts.lookbackDays ?? LOOKBACK_DAYS) * 86_400_000);
   const limit = opts.limit ?? 25;
+  if (item.kind === "category") return findRecallsForSubscription(item, lookback, limit);
   const terms = item.terms.map((t) => t.toLowerCase()).filter((t) => t.length >= 2);
   if (!terms.length && !item.upc) return [];
 
@@ -229,6 +261,47 @@ export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDa
   }
   out.sort((a, b) => b.match.score - a.match.score || b.recall.publishedAt.getTime() - a.recall.publishedAt.getTime());
   return out.slice(0, limit);
+}
+
+async function findRecallsForSubscription(item: WatchItemLite & { minSeverity?: Recall["severity"] | null }, lookback: Date, limit: number): Promise<RecallMatch[]> {
+  const categories = item.categories ?? [];
+  if (!categories.length) return [];
+  const states = [item.homeState, item.lastKnownState].filter((x): x is string => !!x);
+  const recalls = await prisma.recall.findMany({
+    where: {
+      publishedAt: { gte: lookback },
+      category: { in: categories },
+      severity: { in: severitiesAtOrAbove(item.minSeverity ?? "unknown") },
+      ...(states.length ? { OR: [{ distributionStates: { isEmpty: true } }, { distributionStates: { has: "US" } }, ...states.map((st) => ({ distributionStates: { has: st } }))] } : {}),
+    },
+    orderBy: { publishedAt: "desc" },
+    take: limit,
+  });
+  return recalls.map((recall) => ({
+    recall,
+    match: {
+      reason: "category_subscription" as const,
+      score: round(Math.min(1, (recall.severity === "critical" ? 0.7 : recall.severity === "high" ? 0.55 : 0.4) + (states.length ? 0.1 : 0))),
+      explanation: `${item.label}: ${severityLabel(recall.severity)} ${categoryLabel(recall.category)} recall${states.length ? ` sold in ${states.join("/")}` : ""}.`,
+      matchedTerms: [],
+    },
+  }));
+}
+
+const SEVERITY_ORDER: Recall["severity"][] = ["unknown", "low", "high", "critical"];
+/** Severities that a subscription with the given minimum accepts. */
+export function severitiesAtOrAbove(min: Recall["severity"]): Recall["severity"][] {
+  return SEVERITY_ORDER.slice(SEVERITY_ORDER.indexOf(min));
+}
+/** Minimums that would accept a recall of the given severity. */
+export function severitiesAtOrBelow(sev: Recall["severity"]): Recall["severity"][] {
+  return SEVERITY_ORDER.slice(0, SEVERITY_ORDER.indexOf(sev) + 1);
+}
+function severityLabel(s: Recall["severity"]): string {
+  return { critical: "Critical (Class I)", high: "High (Class II)", low: "Low (Class III)", unknown: "Unclassified" }[s];
+}
+function categoryLabel(c: Recall["category"]): string {
+  return c.replace(/_/g, " ");
 }
 
 /** Lower-case and strip punctuation so "Boar's Head" and "boars head" compare equal. */

@@ -28,7 +28,10 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
       if (!premium) throw new HttpProblem(402, "premium_required", "Restaurant tracking is a Premium feature.");
       if (!body.restaurant) throw new HttpProblem(400, "validation", "restaurant details are required for kind=restaurant");
     }
-    if (body.kind !== "upc" && !body.terms.length && !body.restaurant) {
+    if (body.kind === "category" && !body.categories.length) {
+      throw new HttpProblem(400, "validation", "Pick at least one category to subscribe to.");
+    }
+    if (body.kind !== "upc" && body.kind !== "category" && !body.terms.length && !body.restaurant) {
       throw new HttpProblem(400, "validation", "At least one search term is required.");
     }
     if (!premium) {
@@ -46,6 +49,7 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
         context: body.context,
         ocrText: body.ocrText,
         categories: body.categories,
+        minSeverity: body.kind === "category" ? (body.minSeverity ?? "unknown") : null,
         restaurantName: body.restaurant?.name,
         restaurantCity: body.restaurant?.city,
         restaurantState: body.restaurant?.state,
@@ -53,7 +57,7 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
       },
     });
     const lite = { ...item, homeState: user.homeState, lastKnownState: user.lastKnownState };
-    let matches = body.kind === "restaurant" ? [] : await findRecallsForItem(lite);
+    let matches = body.kind === "restaurant" ? [] : await findRecallsForItem(lite, body.kind === "category" ? { lookbackDays: 30, limit: 15 } : {});
     let research: { status: "cached" | "queued" | "unavailable"; profileId: string; researchedAt: string | null } | null = null;
     if (body.kind === "restaurant" && body.restaurant) {
       // Research is shared: if someone already researched this restaurant recently, reuse it

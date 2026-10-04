@@ -20,6 +20,10 @@ export interface NormalizedRecall {
   sourceUpdatedAt: Date | null;
   url: string | null;
   imageUrls: string[];
+  /** Lot / date / model codes a consumer compares with their package. */
+  codeInfo: string | null;
+  /** Agency/firm guidance: return, discard, contact… */
+  remedy: string | null;
   raw: unknown;
 }
 

@@ -40,6 +40,9 @@ export function usePushRegistration(homeState?: string) {
       const token = (await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)).data;
       if (cancelled) return;
       await api.registerDevice({ expoPushToken: token, platform: Platform.OS === "ios" ? "ios" : "android", homeState: homeState as never });
+      // Quiet hours and digests are evaluated in the phone's zone.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (tz) await api.updatePreferences({ timezone: tz }).catch(() => undefined);
     })().catch((err) => console.warn("push registration failed", err));
     return () => {
       cancelled = true;

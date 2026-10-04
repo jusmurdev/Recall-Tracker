@@ -233,6 +233,58 @@ describe("HTTP API (integration)", () => {
     expect(list.json().items.find((w: { id: string }) => w.id === created.json().item.id).restaurant.latitude).toBe(37.5407);
   });
 
+  it("exposes package codes and remedy on recalls", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/recalls?q=jif" });
+    const jif = res.json().items[0];
+    expect(jif.codeInfo).toContain("Lot codes");
+    expect(jif.remedy).toBeTruthy();
+  });
+
+  it("updates notification preferences and lets users dismiss/resolve alerts", async () => {
+    const prefs = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { pushMinSeverity: "high", mutedCategories: ["consumer_product"], quietHoursStart: 22, quietHoursEnd: 7, timezone: "America/Denver", digestMode: true, digestHour: 8 } });
+    expect(prefs.statusCode).toBe(200);
+    expect(prefs.json()).toMatchObject({ pushMinSeverity: "high", mutedCategories: ["consumer_product"], quietHoursStart: 22, quietHoursEnd: 7, digestMode: true, digestHour: 8 });
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { quietHoursStart: null, quietHoursEnd: null } })).json().quietHoursStart).toBeNull();
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { quietHoursStart: 5 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { digestHour: 30 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: "/v1/me", headers: auth() })).json().preferences.pushMinSeverity).toBe("high");
+
+    const sub = await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "category", label: "Critical food near me", terms: [], categories: ["food"], minSeverity: "critical" } });
+    expect(sub.statusCode).toBe(201);
+    expect(sub.json().item.minSeverity).toBe("critical");
+    expect(sub.json().matches.map((m: { reason: string }) => m.reason)).toEqual(["category_subscription"]);
+    expect((await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "category", label: "x", terms: [], categories: [] } })).statusCode).toBe(400);
+
+    const alerts = await app.inject({ method: "GET", url: "/v1/alerts", headers: auth() });
+    const target = alerts.json().items[0];
+    expect((await app.inject({ method: "POST", url: `/v1/alerts/${target.id}/dismiss`, headers: auth(), payload: { reason: "dont_have" } })).json()).toEqual({ dismissed: true });
+    let list = await app.inject({ method: "GET", url: "/v1/alerts", headers: auth() });
+    expect(list.json().items.find((a: { id: string }) => a.id === target.id)).toBeUndefined();
+    list = await app.inject({ method: "GET", url: "/v1/alerts?includeDismissed=true", headers: auth() });
+    expect(list.json().items.find((a: { id: string }) => a.id === target.id).dismissReason).toBe("dont_have");
+    await app.inject({ method: "POST", url: `/v1/alerts/${target.id}/undismiss`, headers: auth() });
+    expect((await app.inject({ method: "POST", url: `/v1/alerts/${target.id}/resolve`, headers: auth(), payload: { action: "returned" } })).json()).toEqual({ resolved: true });
+    const detail = await app.inject({ method: "GET", url: `/v1/alerts/${target.id}`, headers: auth() });
+    expect(detail.json()).toMatchObject({ dismissedAt: null, resolvedAction: "returned" });
+    expect((await app.inject({ method: "POST", url: `/v1/alerts/${target.id}/resolve`, headers: auth(), payload: { action: "ate_it" } })).statusCode).toBe(400);
+    const summary = await app.inject({ method: "GET", url: "/v1/alerts/summary", headers: auth() });
+    expect(summary.json().resolved).toBe(1);
+  });
+
+  it("deletes the account and everything attached to it", async () => {
+    const other = await app.inject({ method: "POST", url: "/v1/auth/anonymous", payload: { installId: "delete-me-install", platform: "ios" } });
+    const h = { authorization: `Bearer ${other.json().token}` };
+    await app.inject({ method: "POST", url: "/v1/watchlist", headers: h, payload: { kind: "product", label: "Jif", terms: ["jif"] } });
+    await app.inject({ method: "POST", url: "/v1/devices", headers: h, payload: { expoPushToken: "ExponentPushToken[del]", platform: "ios" } });
+    const id = other.json().user.id;
+    expect((await app.inject({ method: "DELETE", url: "/v1/me", headers: h })).statusCode).toBe(204);
+    expect(await prisma.user.findUnique({ where: { id } })).toBeNull();
+    expect(await prisma.watchItem.count({ where: { userId: id } })).toBe(0);
+    expect(await prisma.alert.count({ where: { userId: id } })).toBe(0);
+    expect(await prisma.device.count({ where: { userId: id } })).toBe(0);
+    expect((await app.inject({ method: "GET", url: "/v1/me", headers: h })).statusCode).toBe(401);
+  });
+
   it("flips tiers from the entitlement webhook", async () => {
     process.env.REVENUECAT_WEBHOOK_SECRET = "whsec";
     const res = await app.inject({

@@ -128,6 +128,8 @@ export async function upsertRecalls(items: NormalizedRecall[]): Promise<{
       sourceUpdatedAt: item.sourceUpdatedAt,
       url: item.url,
       imageUrls: item.imageUrls,
+      codeInfo: item.codeInfo,
+      remedy: item.remedy,
       contentHash: hash,
       raw: item.raw as Prisma.InputJsonValue,
     };

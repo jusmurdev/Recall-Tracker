@@ -63,6 +63,10 @@ export const Recall = z.object({
   updatedAt: z.string().datetime(),
   url: z.string().url().nullable(),
   imageUrls: z.array(z.string()),
+  /** Lot numbers, best-by dates, model numbers to compare against the package in hand. */
+  codeInfo: z.string().nullable(),
+  /** What to do: return for refund, discard, contact the firm… */
+  remedy: z.string().nullable(),
 });
 export type Recall = z.infer<typeof Recall>;
 
@@ -132,7 +136,7 @@ export type RegisterDeviceRequest = z.infer<typeof RegisterDeviceRequest>;
  *  - scan:       OCR text captured from a physical label, with optional user context
  *  - restaurant: PREMIUM — a restaurant whose supply chain is researched by AI
  */
-export const WatchItemKind = z.enum(["product", "upc", "scan", "restaurant"]);
+export const WatchItemKind = z.enum(["product", "upc", "scan", "restaurant", "category"]);
 export type WatchItemKind = z.infer<typeof WatchItemKind>;
 
 export const CreateWatchItemRequest = z.object({
@@ -159,6 +163,8 @@ export const CreateWatchItemRequest = z.object({
     })
     .optional(),
   categories: z.array(RecallCategory).max(9).default([]),
+  /** Category subscriptions only: ignore recalls below this severity. */
+  minSeverity: RecallSeverity.optional(),
 });
 export type CreateWatchItemRequest = z.infer<typeof CreateWatchItemRequest>;
 
@@ -200,8 +206,38 @@ export const Alert = z.object({
   createdAt: z.string().datetime(),
   readAt: z.string().datetime().nullable(),
   pushedAt: z.string().datetime().nullable(),
+  dismissedAt: z.string().datetime().nullable(),
+  dismissReason: z.enum(["dont_have", "false_match", "not_interested"]).nullable(),
+  resolvedAt: z.string().datetime().nullable(),
+  resolvedAction: z.enum(["discarded", "returned", "contacted", "checked_not_affected"]).nullable(),
 });
 export type Alert = z.infer<typeof Alert>;
+
+export const DismissAlertRequest = z.object({ reason: z.enum(["dont_have", "false_match", "not_interested"]).default("dont_have") });
+export type DismissAlertRequest = z.infer<typeof DismissAlertRequest>;
+export const ResolveAlertRequest = z.object({ action: z.enum(["discarded", "returned", "contacted", "checked_not_affected"]) });
+export type ResolveAlertRequest = z.infer<typeof ResolveAlertRequest>;
+
+// ---------------------------------------------------------------------------
+// Notification preferences
+// ---------------------------------------------------------------------------
+
+export const NotificationPreferences = z.object({
+  /** Lowest severity that gets a push. "unknown" means everything. */
+  pushMinSeverity: RecallSeverity,
+  mutedCategories: z.array(RecallCategory),
+  /** Local hours 0–23; pushes are held while within [start, end). Null disables. Wraps midnight. */
+  quietHoursStart: z.number().int().min(0).max(23).nullable(),
+  quietHoursEnd: z.number().int().min(0).max(23).nullable(),
+  /** IANA zone, e.g. "America/Chicago". Sent by the phone. */
+  timezone: z.string().max(64).nullable(),
+  /** One daily summary instead of a push per alert. Critical alerts still go out at once. */
+  digestMode: z.boolean(),
+  digestHour: z.number().int().min(0).max(23),
+});
+export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
+export const UpdatePreferencesRequest = NotificationPreferences.partial();
+export type UpdatePreferencesRequest = z.infer<typeof UpdatePreferencesRequest>;
 
 // ---------------------------------------------------------------------------
 // Scanning (OCR / barcode)

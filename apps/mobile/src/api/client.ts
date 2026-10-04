@@ -5,16 +5,20 @@ import type {
   CreateConnectorRequest,
   CreateWatchItemRequest,
   CreateWatchItemResponse,
+  DismissAlertRequest,
   ImportPurchasesResponse,
+  NotificationPreferences,
   Recall,
   RecallListQuery,
   NearbyRestaurant,
   RegisterDeviceRequest,
+  ResolveAlertRequest,
   RestaurantLookup,
   ScanMatch,
   ScanMatchRequest,
   ScanMatchResponse,
   UpdateLocationRequest,
+  UpdatePreferencesRequest,
   WatchItem,
 } from "@recall/shared";
 import { apiBaseUrl } from "@/lib/config";
@@ -86,6 +90,7 @@ export interface Me {
   tier: "free" | "premium";
   homeState: string | null;
   lastKnownState: string | null;
+  preferences: NotificationPreferences;
   premium: { tier: "free" | "premium"; features: { connectors: boolean; restaurants: boolean; aiScan: boolean }; expiresAt: string | null };
 }
 
@@ -99,6 +104,8 @@ export interface Stats {
 export const api = {
   me: () => request<Me>("/v1/me"),
   registerDevice: (body: RegisterDeviceRequest) => request<{ id: string }>("/v1/devices", { method: "POST", body: JSON.stringify(body) }),
+  updatePreferences: (body: UpdatePreferencesRequest) => request<NotificationPreferences>("/v1/me/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+  deleteAccount: () => request<void>("/v1/me", { method: "DELETE" }),
   updateLocation: (body: UpdateLocationRequest) =>
     request<{ homeState: string | null; lastKnownState: string | null; lastLocationAt: string | null }>("/v1/me/location", { method: "PUT", body: JSON.stringify(body) }),
 
@@ -115,6 +122,10 @@ export const api = {
   alert: (id: string) => request<Alert>(`/v1/alerts/${id}`),
   markRead: (id: string) => request<{ updated: number }>(`/v1/alerts/${id}/read`, { method: "POST" }),
   markAllRead: () => request<{ updated: number }>("/v1/alerts/read-all", { method: "POST" }),
+  dismissAlert: (id: string, body: DismissAlertRequest) => request<{ dismissed: boolean }>(`/v1/alerts/${id}/dismiss`, { method: "POST", body: JSON.stringify(body) }),
+  undismissAlert: (id: string) => request<{ dismissed: boolean }>(`/v1/alerts/${id}/undismiss`, { method: "POST" }),
+  resolveAlert: (id: string, body: ResolveAlertRequest) => request<{ resolved: boolean }>(`/v1/alerts/${id}/resolve`, { method: "POST", body: JSON.stringify(body) }),
+  alertSummary: () => request<{ unread: number; open: number; resolved: number; dismissed: number }>("/v1/alerts/summary"),
 
   scanMatch: (body: ScanMatchRequest) => request<ScanMatchResponse>("/v1/scan/match", { method: "POST", body: JSON.stringify(body) }),
   scanIdentify: (body: { imageBase64: string; mediaType?: string; ocrText?: string; context?: string }) =>
