@@ -1,19 +1,23 @@
 import type {
   Alert,
   AuthResponse,
+  CatalogRestaurant,
   Connector,
   CreateConnectorRequest,
   CreateWatchItemRequest,
   CreateWatchItemResponse,
   DismissAlertRequest,
   ImportPurchasesResponse,
+  Inspection,
   NotificationPreferences,
   Recall,
   RecallListQuery,
   NearbyRestaurant,
   RegisterDeviceRequest,
   ResolveAlertRequest,
+  RestaurantGrade,
   RestaurantLookup,
+  RestaurantNotice,
   ScanMatch,
   ScanMatchRequest,
   ScanMatchResponse,
@@ -152,9 +156,18 @@ export const api = {
       status: "ready" | "pending" | "failed";
       error: string | null;
       location: { latitude: number; longitude: number } | null;
+      grade: RestaurantGrade | null;
+      gradeCoverage: "open_data" | "research" | "none";
+      gradeError: string | null;
+      inspections: Inspection[];
+      updates: RestaurantNotice[];
       shared: { profileId: string; trackedBy: number; researchCount: number; cacheHits: number; fresh: boolean; canRefresh: boolean } | null;
     }>(`/v1/premium/restaurants/${id}`),
   restaurantLookup: (q: { name: string; city?: string; state?: string; website?: string }) => request<RestaurantLookup>(`/v1/premium/restaurants/lookup?${qs(q)}`),
   restaurantsNearby: (q: { lat: number; lng: number; radiusKm?: number }) => request<{ items: NearbyRestaurant[] }>(`/v1/premium/restaurants/nearby?${qs(q)}`),
+  restaurantSearch: (q: { q: string; lat?: number; lng?: number; state?: string }) => request<{ items: CatalogRestaurant[] }>(`/v1/premium/restaurants/search?${qs(q)}`),
+  restaurantUpdates: () => request<{ unread: number; items: RestaurantNotice[] }>("/v1/premium/restaurants/updates"),
+  restaurantUpdatesReadAll: () => request<{ updated: number }>("/v1/premium/restaurants/updates/read-all", { method: "POST" }),
+  refreshGrade: (id: string) => request<{ queued: boolean; reason?: string; grade?: RestaurantGrade }>(`/v1/premium/restaurants/${id}/grade/refresh`, { method: "POST" }),
   refreshRestaurant: (id: string) => request<{ queued: boolean }>(`/v1/premium/restaurants/${id}/refresh`, { method: "POST" }),
 };

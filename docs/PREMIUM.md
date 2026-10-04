@@ -80,6 +80,32 @@ eat at the same places. So research is stored once per real-world restaurant in
 Each watch item keeps a snapshot (`researchSummary`, `researchUpdatedAt`, `researchJson`)
 so deleting or re-researching a profile never blanks what a user already sees.
 
+### Health inspection grades
+
+Grades are stored on the same shared profile and refreshed by the daily maintenance job
+for every restaurant anyone tracks, so a venue is looked up once per week, not once per user.
+
+- **Open-data adapters** (`apps/api/src/inspections/sources/`): NYC DOHMH (letter grade +
+  points, violations per inspection) and Chicago CDPH (Pass / Pass w/ Conditions / Fail,
+  violations text). Each adapter decides whether it `covers()` a city/state, finds the venue
+  by fuzzy name + distance (`match.ts`), and returns normalised `InspectionRecord`s. Adding a
+  county is one adapter file plus a fixture. A Socrata app token (`SOCRATA_APP_TOKEN`) raises
+  rate limits.
+- **AI fallback**: elsewhere, the research prompt also asks for the latest official grade with
+  its source page; it is stored through the same sync path (`gradeSource = ai_research`) and
+  never overrides a structured source.
+- **`syncGrade()`** upserts `RestaurantInspection` rows, sets the profile's current grade /
+  score / scale, and on change writes a `RestaurantNotice` for every tracker. Drops (and a
+  first grade that is poor) are pushed; improvements only appear in-app. `interpretGrade()`
+  maps any scale to good / ok / poor so the app can colour it.
+- **Catalog**: `GET /v1/premium/restaurants/search` (fuzzy name, optional distance ranking)
+  shows research status, grade and tracker count so a user picks the existing entry
+  (`restaurant.profileId`) instead of creating a duplicate. `GET …/updates` lists notices.
+- **Durability**: removing a watch item or deleting an account never deletes the profile,
+  its inspections or research. The maintenance job prunes only profiles that are untracked,
+  were never researched, have no grade, and have not been requested for
+  `PROFILE_PRUNE_DAYS`. Tracked profiles get stale research refreshed at system expense.
+
 ### What the research does
 
 The worker runs Claude with the server-side **web search tool** (`web_search_20260209`, up to

@@ -2,8 +2,8 @@ import { Expo, type ExpoPushMessage, type ExpoPushTicket } from "expo-server-sdk
 import { env } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
-import { enqueuePushForAlerts, enqueueReceipts } from "../jobs/queues.js";
-import { decidePush } from "./prefs.js";
+import { enqueuePushForAlerts, enqueuePushForNotices, enqueueReceipts } from "../jobs/queues.js";
+import { decidePush, inQuietHours, msUntilQuietEnd } from "./prefs.js";
 
 let expo: Expo | null = null;
 function client(): Expo {
@@ -141,4 +141,55 @@ export async function checkReceipts(ticketIds: string[], expoClient: Pick<Expo, 
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+/**
+ * Push restaurant notices (grade drops etc.) to their users. Honors quiet hours (delay) but not
+ * severity/category filters, which are about recalls. Digest mode does not batch these: a grade
+ * drop at a place you eat is time-sensitive.
+ */
+export async function sendPushForNotices(noticeIds: string[], expoClient: Pick<Expo, "sendPushNotificationsAsync"> = client()): Promise<PushResult> {
+  const notices = await prisma.restaurantNotice.findMany({
+    where: { id: { in: noticeIds }, pushedAt: null },
+    include: { user: { include: { devices: { where: { enabled: true, invalidatedAt: null } } } }, profile: { select: { name: true } } },
+  });
+  const messages: Array<ExpoPushMessage & { noticeId: string; deviceId: string }> = [];
+  const delayed = new Map<number, string[]>();
+  let skipped = 0;
+  const now = new Date();
+  for (const n of notices) {
+    if (inQuietHours(n.user, now)) {
+      const bucket = Math.ceil(msUntilQuietEnd(n.user, now) / 60_000) * 60_000;
+      delayed.set(bucket, [...(delayed.get(bucket) ?? []), n.id]);
+      skipped += 1;
+      continue;
+    }
+    if (!n.user.devices.length) {
+      await prisma.restaurantNotice.update({ where: { id: n.id }, data: { pushedAt: now } });
+      skipped += 1;
+      continue;
+    }
+    for (const device of n.user.devices) {
+      if (!Expo.isExpoPushToken(device.expoPushToken)) continue;
+      messages.push({ to: device.expoPushToken, title: n.title, body: n.body, data: { noticeId: n.id, url: `recalltracker://restaurant-updates` }, channelId: "recalls", noticeId: n.id, deviceId: device.id });
+    }
+  }
+  for (const [delayMs, ids] of delayed) await enqueuePushForNotices(ids, { delayMs });
+  let sent = 0;
+  let invalidated = 0;
+  for (let i = 0; i < messages.length; i += 100) {
+    const chunk = messages.slice(i, i + 100);
+    const tickets = await expoClient.sendPushNotificationsAsync(chunk.map(({ noticeId: _n, deviceId: _d, ...m }) => m));
+    for (let j = 0; j < tickets.length; j += 1) {
+      const t = tickets[j]!;
+      const m = chunk[j]!;
+      if (t.status === "ok") sent += 1;
+      else if (t.details?.error === "DeviceNotRegistered") {
+        invalidated += 1;
+        await prisma.device.update({ where: { id: m.deviceId }, data: { enabled: false, invalidatedAt: now } });
+      }
+      await prisma.restaurantNotice.update({ where: { id: m.noticeId }, data: { pushedAt: now } });
+    }
+  }
+  return { sent, skipped, invalidated };
 }

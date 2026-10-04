@@ -1,7 +1,7 @@
 import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type ViewProps, type ViewStyle } from "react-native";
 import { colors, severityColor, spacing } from "@/lib/theme";
-import { CATEGORY_LABEL, type Recall, type RecallSeverity } from "@recall/shared";
+import { CATEGORY_LABEL, type Recall, type RecallSeverity, type RestaurantGrade } from "@recall/shared";
 
 export function Screen({ children, style, ...rest }: ViewProps) {
   return (
@@ -70,6 +70,25 @@ export function Pill({ label, active, onPress }: { label: string; active?: boole
     <Pressable accessibilityRole="button" accessibilityState={{ selected: !!active }} accessibilityLabel={label} onPress={onPress} style={[styles.pill, active && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
       <Text style={[styles.pillText, active && { color: colors.bg, fontWeight: "700" }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+export const gradeColor: Record<RestaurantGrade["level"], string> = { good: colors.accent, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
+
+/** Health inspection grade chip: letter/score with a traffic-light colour. */
+export function GradeBadge({ grade, compact }: { grade: RestaurantGrade | null | undefined; compact?: boolean }) {
+  if (!grade || (!grade.grade && grade.score == null)) {
+    return compact ? null : (
+      <View style={[styles.badge, { backgroundColor: colors.border }]}>
+        <Text style={[styles.badgeText, { color: colors.muted }]}>NO GRADE YET</Text>
+      </View>
+    );
+  }
+  const text = compact ? (grade.grade ?? String(grade.score)) : (grade.label ?? grade.grade ?? String(grade.score));
+  return (
+    <View style={[styles.badge, { backgroundColor: gradeColor[grade.level] }]} accessibilityLabel={`Health grade ${text}`}>
+      <Text style={styles.badgeText}>{compact ? text : `HEALTH ${text.toUpperCase()}`}</Text>
+    </View>
   );
 }
 

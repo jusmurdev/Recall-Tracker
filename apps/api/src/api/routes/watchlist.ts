@@ -27,6 +27,15 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
     if (body.kind === "restaurant") {
       if (!premium) throw new HttpProblem(402, "premium_required", "Restaurant tracking is a Premium feature.");
       if (!body.restaurant) throw new HttpProblem(400, "validation", "restaurant details are required for kind=restaurant");
+      if (body.restaurant.profileId) {
+        // Fill the item's display fields from the catalog entry.
+        const cat = await prisma.restaurantProfile.findUnique({ where: { id: body.restaurant.profileId } });
+        if (!cat) throw new HttpProblem(404, "not_found", "That restaurant is no longer in the catalog.");
+        body.restaurant = { ...body.restaurant, name: cat.name, city: body.restaurant.city ?? cat.city ?? undefined, state: body.restaurant.state ?? cat.state ?? undefined, website: body.restaurant.website ?? cat.website ?? undefined };
+        if (!body.label) body.label = cat.name;
+      } else if (!body.restaurant.name) {
+        throw new HttpProblem(400, "validation", "restaurant.name or restaurant.profileId is required");
+      }
     }
     if (body.kind === "category" && !body.categories.length) {
       throw new HttpProblem(400, "validation", "Pick at least one category to subscribe to.");
@@ -38,12 +47,12 @@ export async function watchlistRoutes(app: FastifyInstance): Promise<void> {
       const count = await prisma.watchItem.count({ where: { userId: user.id } });
       if (count >= FREE_WATCH_LIMIT) throw new HttpProblem(402, "limit_reached", `Free accounts can watch up to ${FREE_WATCH_LIMIT} items.`);
     }
-    const terms = [...new Set([...(body.restaurant ? [body.restaurant.name.toLowerCase()] : []), ...body.terms.map((t) => t.toLowerCase())])];
+    const terms = [...new Set([...(body.restaurant?.name ? [body.restaurant.name.toLowerCase()] : []), ...body.terms.map((t) => t.toLowerCase())])];
     const item = await prisma.watchItem.create({
       data: {
         userId: user.id,
         kind: body.kind,
-        label: body.label,
+        label: body.label || body.restaurant?.name || "Restaurant",
         terms,
         upc: body.upc,
         context: body.context,

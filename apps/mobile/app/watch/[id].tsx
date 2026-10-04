@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import React from "react";
-import { Alert as RNAlert, Linking, ScrollView, Text } from "react-native";
-import { Body, Button, Card, Loading, PremiumTag, RecallRow, Screen, Subtitle, Title } from "@/components/ui";
+import { Alert as RNAlert, Linking, ScrollView, Text, View } from "react-native";
+import { Body, Button, Card, GradeBadge, Loading, PremiumTag, RecallRow, Screen, Subtitle, Title, gradeColor } from "@/components/ui";
 import { useDeleteWatchItem, useMe, useRestaurant, useWatchlist } from "@/hooks/queries";
 import { api } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
@@ -51,6 +51,64 @@ export default function WatchItemDetail() {
           {item.categories.length ? <Body muted>Categories: {item.categories.join(", ")}</Body> : null}
           <Body muted>Added {new Date(item.createdAt).toLocaleDateString()}{item.importedFrom ? ` · imported from ${item.importedFrom}` : ""}</Body>
         </Card>
+
+        {isRestaurant && research.data ? (
+          <Card style={research.data.grade?.level ? { borderColor: gradeColor[research.data.grade.level] } : undefined}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Subtitle>Health inspection grade</Subtitle>
+              <GradeBadge grade={research.data.grade} />
+            </View>
+            {research.data.grade?.lastInspectedAt ? (
+              <Body muted>
+                Last inspected {new Date(research.data.grade.lastInspectedAt).toLocaleDateString()} · source {research.data.grade.source?.replace(/_/g, " ")}
+                {research.data.grade.checkedAt ? ` · checked ${new Date(research.data.grade.checkedAt).toLocaleDateString()}` : ""}
+              </Body>
+            ) : research.data.gradeCoverage === "none" || research.data.gradeError ? (
+              <Body muted>{research.data.gradeError ?? "No official inspection data for this area yet; research may still surface a grade."}</Body>
+            ) : (
+              <Body muted>Checking the health department's records…</Body>
+            )}
+            {research.data.inspections.length ? (
+              <View style={{ gap: 8 }}>
+                <Subtitle>History</Subtitle>
+                {research.data.inspections.slice(0, 5).map((i) => (
+                  <View key={i.id} style={{ gap: 2 }}>
+                    <Text style={{ color: colors.text, fontWeight: "600" }}>
+                      {new Date(i.inspectedAt).toLocaleDateString()} · {i.grade ?? (i.score != null ? `${i.score} pts` : "ungraded")}
+                      {i.inspectionType ? ` · ${i.inspectionType}` : ""}
+                    </Text>
+                    {i.violations.filter((v) => v.critical).slice(0, 3).map((v, idx) => (
+                      <Text key={idx} style={{ color: colors.high, fontSize: 12 }} numberOfLines={2}>
+                        ⚠ {v.description}
+                      </Text>
+                    ))}
+                    {i.violations.length > 3 || i.violations.some((v) => !v.critical) ? (
+                      <Text style={{ color: colors.muted, fontSize: 12 }}>
+                        {i.violations.length} violation{i.violations.length === 1 ? "" : "s"} ({i.violations.filter((v) => v.critical).length} critical)
+                      </Text>
+                    ) : null}
+                    {i.sourceUrl ? (
+                      <Text style={{ color: colors.accent, fontSize: 12 }} onPress={() => void Linking.openURL(i.sourceUrl!)}>
+                        View official record ↗
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <Button title="Re-check grade" variant="ghost" onPress={() => void api.refreshGrade(id).then(() => research.refetch())} />
+            {research.data.updates.length ? (
+              <View style={{ gap: 4 }}>
+                <Subtitle>Updates</Subtitle>
+                {research.data.updates.slice(0, 5).map((u) => (
+                  <Text key={u.id} style={{ color: colors.text, fontSize: 13 }}>
+                    {new Date(u.createdAt).toLocaleDateString()} · {u.title}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+          </Card>
+        ) : null}
 
         {isRestaurant ? (
           <Card>

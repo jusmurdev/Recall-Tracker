@@ -19,6 +19,8 @@ import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
 import { findRecallsForItem, recordAlertsForItem, type RecallMatch } from "../matching/engine.js";
 import { assertQuota, claude, model, parseJsonOutput, recordUsage, textOf } from "./claude.js";
+import { syncGrade } from "../inspections/sync.js";
+import { enqueueGradeSync } from "../jobs/queues.js";
 
 export const Research = z.object({
   summary: z.string().describe("3-5 sentences a diner would want to know, plain language"),
@@ -27,12 +29,24 @@ export const Research = z.object({
     .max(30),
   riskSignals: z.array(z.object({ signal: z.string(), sourceUrl: z.string().nullable() })).max(20),
   sources: z.array(z.string()).max(30),
+  /** Latest official health inspection result, when a published source states it. */
+  inspection: z
+    .object({
+      grade: z.string().nullable().describe("As the jurisdiction expresses it: A/B/C, Pass/Fail, or a score"),
+      score: z.number().int().nullable(),
+      scale: z.enum(["letter_abc", "score_100", "pass_fail", "nyc_points"]).nullable(),
+      date: z.string().nullable().describe("ISO date of the inspection"),
+      sourceUrl: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type Research = z.infer<typeof Research>;
 
 const SYSTEM = `You research restaurants for a consumer food-safety app. Given a restaurant, find:
 1. Who supplies its food: named distributors (e.g. Sysco, US Foods, Gordon Food Service), producers, brands it advertises using, and signature ingredients. Menus, "about us" pages, press, supplier case studies, and job postings often name them. Mark each as confirmed (named by the restaurant or supplier), likely (strong indirect evidence) or guess.
 2. Food-safety signals: health inspection results, closures, reported illnesses, and recurring review complaints about food safety (not taste or service).
+3. The most recent official health inspection grade or score, with its date and the government page it came from (county/city health department sites). Leave it null if you cannot find an official source.
 Be factual and cite the pages you relied on. If you cannot find something, say so rather than guessing. Do not include personal data about individuals.`;
 
 export interface RestaurantIdentity {
@@ -110,7 +124,7 @@ export interface ResearchOutcome {
  * Research a profile (unless a fresh result already exists) and apply it to every watch item
  * linked to it. The requesting user's AI quota is charged when the AI actually runs.
  */
-export async function researchProfile(profileId: string, requestingUserId: string, client?: Anthropic): Promise<ResearchOutcome> {
+export async function researchProfile(profileId: string, requestingUserId: string | null, client?: Anthropic): Promise<ResearchOutcome> {
   let profile = await prisma.restaurantProfile.findUniqueOrThrow({ where: { id: profileId } });
   if (isFresh(profile)) {
     // Another request finished first, or the cache is simply still good.
@@ -119,7 +133,8 @@ export async function researchProfile(profileId: string, requestingUserId: strin
     return { profile, research, supplierTerms: profile.supplierTerms, matchesByItem, cached: true };
   }
 
-  await assertQuota(requestingUserId);
+  // System refreshes (maintenance job) are not charged to anyone.
+  if (requestingUserId) await assertQuota(requestingUserId);
   await prisma.restaurantProfile.update({ where: { id: profileId }, data: { researchStatus: "researching", researchError: null } });
   try {
     const research = await runResearch(profile, requestingUserId, client ?? claude());
@@ -136,6 +151,7 @@ export async function researchProfile(profileId: string, requestingUserId: strin
       },
     });
     const matchesByItem = await applyProfileToItems(profile, research);
+    await applyInspectionFromResearch(profile, research);
     logger.info({ profileId, restaurant: profile.name, suppliers: supplierTerms.length, items: Object.keys(matchesByItem).length }, "restaurant research stored");
     return { profile, research, supplierTerms, matchesByItem, cached: false };
   } catch (err) {
@@ -149,7 +165,24 @@ export async function researchProfile(profileId: string, requestingUserId: strin
   }
 }
 
-async function runResearch(profile: RestaurantProfile, userId: string, client: Anthropic): Promise<Research> {
+/**
+ * Jurisdictions without an open-data adapter still get a grade: whatever the research found on
+ * an official page is stored through the same sync path (so change notices work), but it never
+ * overrides a grade that came from a structured source.
+ */
+async function applyInspectionFromResearch(profile: RestaurantProfile, research: Research): Promise<void> {
+  const insp = research.inspection;
+  if (!insp || (!insp.grade && insp.score == null) || !insp.date) return;
+  if (profile.gradeSource && profile.gradeSource !== "ai_research") return;
+  const inspectedAt = new Date(insp.date);
+  if (Number.isNaN(inspectedAt.getTime())) return;
+  await syncGrade(profile.id, {
+    source: "ai_research",
+    records: [{ source: "ai_research", externalId: null, inspectedAt, grade: insp.grade, score: insp.score, scale: insp.scale ?? (insp.score != null ? "score_100" : "letter_abc"), inspectionType: null, violations: [], sourceUrl: insp.sourceUrl }],
+  });
+}
+
+async function runResearch(profile: RestaurantProfile, userId: string | null, client: Anthropic): Promise<Research> {
   const where = [profile.city, profile.state].filter(Boolean).join(", ");
   const prompt = `Restaurant: ${profile.name}${where ? ` (${where})` : ""}${profile.website ? `\nWebsite: ${profile.website}` : ""}`;
   const tools: Anthropic.ToolUnion[] = [
@@ -219,8 +252,13 @@ export async function applyProfileToItem(profile: RestaurantProfile, research: R
  * Called when a user adds a restaurant: link the item to the shared profile and either reuse
  * fresh research immediately (no AI call) or report that research is needed.
  */
-export async function attachRestaurant(item: WatchItem, identity: RestaurantIdentity): Promise<{ profile: RestaurantProfile; cached: boolean; matches: RecallMatch[] }> {
-  const profile = await getOrCreateProfile(identity);
+export async function attachRestaurant(item: WatchItem, identity: RestaurantIdentity & { profileId?: string | null }): Promise<{ profile: RestaurantProfile; cached: boolean; matches: RecallMatch[] }> {
+  // Picking from the shared catalog beats describing the place again: no duplicate profiles.
+  const existing = identity.profileId ? await prisma.restaurantProfile.findUnique({ where: { id: identity.profileId } }) : null;
+  const profile = existing
+    ? await prisma.restaurantProfile.update({ where: { id: existing.id }, data: { lastRequestedAt: new Date() } })
+    : await getOrCreateProfile(identity);
+  if (!profile.gradeCheckedAt) await enqueueGradeSync(profile.id).catch((err) => logger.warn({ err }, "grade sync enqueue failed"));
   const linked = await prisma.watchItem.update({ where: { id: item.id }, data: { restaurantProfileId: profile.id } });
   if (isFresh(profile)) {
     const research = Research.parse(profile.researchJson);

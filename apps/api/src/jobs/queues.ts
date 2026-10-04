@@ -13,7 +13,12 @@ export interface IngestJob {
   source: RecallSource;
 }
 export interface PushJob {
-  alertIds: string[];
+  alertIds?: string[];
+  /** RestaurantNotice ids (grade changes etc.). */
+  noticeIds?: string[];
+}
+export interface GradeJob {
+  profileId: string;
 }
 export interface ResearchJob {
   /** Shared RestaurantProfile to research; every watch item linked to it is updated. */
@@ -64,6 +69,25 @@ export async function enqueuePushForAlerts(alertIds: string[], opts: { delayMs?:
   }
 }
 
+export async function enqueuePushForNotices(noticeIds: string[], opts: { delayMs?: number } = {}): Promise<void> {
+  if (process.env.DISABLE_QUEUES === "1" || !noticeIds.length) return;
+  for (let i = 0; i < noticeIds.length; i += 100) {
+    await pushQueue().add("push-notices", { noticeIds: noticeIds.slice(i, i + 100) }, { ...DEFAULT_OPTS, ...(opts.delayMs ? { delay: opts.delayMs } : {}) });
+  }
+}
+
+export const QUEUE_GRADE = "grade";
+export const gradeQueue = (): Queue<GradeJob> => queue<GradeJob>(QUEUE_GRADE);
+/** One grade sync per profile at a time (jobId dedupes concurrent requests). Returns false when queues are off. */
+export async function enqueueGradeSync(profileId: string): Promise<boolean> {
+  if (process.env.DISABLE_QUEUES === "1") return false;
+  await gradeQueue().add("grade", { profileId }, { ...DEFAULT_OPTS, jobId: `grade:${profileId}` });
+  return true;
+}
+
+export const QUEUE_MAINTENANCE = "maintenance";
+export const maintenanceQueue = (): Queue<Record<string, never>> => queue<Record<string, never>>(QUEUE_MAINTENANCE);
+
 export const QUEUE_DIGEST = "digest";
 export const digestQueue = (): Queue<Record<string, never>> => queue<Record<string, never>>(QUEUE_DIGEST);
 
@@ -97,6 +121,8 @@ export async function scheduleIngestion(): Promise<void> {
   }
   // Hourly: send daily digests to users whose local digest hour has arrived.
   await digestQueue().upsertJobScheduler("digest-hourly", { pattern: "7 * * * *", tz: "UTC" }, { name: "digest", data: {}, opts: { attempts: 1 } });
+  // Daily: refresh grades + stale research for tracked restaurants, prune worthless profiles.
+  await maintenanceQueue().upsertJobScheduler("restaurant-maintenance", { pattern: e.MAINTENANCE_CRON, tz: "UTC" }, { name: "maintenance", data: {}, opts: { attempts: 1 } });
 }
 
 export async function closeQueues(): Promise<void> {

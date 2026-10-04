@@ -38,7 +38,7 @@ export async function assertQuota(userId: string): Promise<void> {
   if (used >= env().AI_DAILY_REQUEST_LIMIT) throw new QuotaExceededError();
 }
 
-export async function recordUsage(userId: string, feature: string, usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null } | undefined, usedModel = model()): Promise<void> {
+export async function recordUsage(userId: string | null, feature: string, usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null } | undefined, usedModel = model()): Promise<void> {
   await prisma.aiUsage.create({
     data: {
       userId,

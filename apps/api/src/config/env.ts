@@ -21,6 +21,9 @@ const Env = z.object({
 
   RESTAURANT_RESEARCH_TTL_DAYS: z.coerce.number().int().min(1).default(90),
   RESTAURANT_RESEARCH_MIN_REFRESH_DAYS: z.coerce.number().int().min(0).default(7),
+  GRADE_REFRESH_DAYS: z.coerce.number().int().min(1).default(7),
+  PROFILE_PRUNE_DAYS: z.coerce.number().int().min(1).default(180),
+  MAINTENANCE_CRON: z.string().default("20 6 * * *"),
 
   EXPO_ACCESS_TOKEN: z.string().optional(),
 

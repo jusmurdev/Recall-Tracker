@@ -4,7 +4,7 @@ import React from "react";
 import { Alert as RNAlert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import type { WatchItem } from "@recall/shared";
 import { Button, Empty, Loading, PremiumTag, Screen } from "@/components/ui";
-import { useDeleteWatchItem, useMe, useWatchlist } from "@/hooks/queries";
+import { useDeleteWatchItem, useMe, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { colors, spacing } from "@/lib/theme";
 
 const KIND_ICON: Record<WatchItem["kind"], React.ComponentProps<typeof Ionicons>["name"]> = {
@@ -21,6 +21,7 @@ export default function WatchlistScreen() {
   const del = useDeleteWatchItem();
   const items = list.data?.items ?? [];
   const premium = me.data?.tier === "premium";
+  const updates = useRestaurantUpdates(!!premium);
 
   return (
     <Screen>
@@ -33,6 +34,14 @@ export default function WatchlistScreen() {
           <View style={{ gap: spacing(1) }}>
             <Button title="Watch a product, brand or barcode" onPress={() => router.push("/watch/new")} />
             <Button title="Subscribe to a whole category" variant="ghost" onPress={() => router.push("/watch/subscribe")} />
+            {updates.data?.unread ? (
+              <Pressable onPress={() => router.push("/restaurant-updates")} style={[styles.restaurantCta, { borderColor: colors.critical }]} accessibilityRole="button">
+                <Ionicons name="alert-circle-outline" size={20} color={colors.critical} />
+                <Text style={styles.restaurantText}>
+                  {updates.data.unread} restaurant update{updates.data.unread > 1 ? "s" : ""}: {updates.data.items[0]?.title}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => router.push(premium ? "/watch/restaurant" : "/premium")} style={styles.restaurantCta}>
               <Ionicons name="restaurant-outline" size={20} color={colors.premium} />
               <Text style={styles.restaurantText}>Track a restaurant's suppliers</Text>

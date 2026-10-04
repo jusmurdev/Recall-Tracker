@@ -233,6 +233,49 @@ describe("HTTP API (integration)", () => {
     expect(list.json().items.find((w: { id: string }) => w.id === created.json().item.id).restaurant.latitude).toBe(37.5407);
   });
 
+  it("offers a shared catalog with grades so users pick instead of re-creating restaurants", async () => {
+    await prisma.user.update({ where: { id: userId }, data: { tier: "premium" } });
+    // Someone else added and graded Capitol Deli earlier.
+    const other = await prisma.user.create({ data: { installId: "cat-other", tokenHash: "cat-other", tier: "premium" } });
+    const profile = await prisma.restaurantProfile.create({
+      data: { key: "name:capitol deli|manhattan|NY", name: "Capitol Deli", city: "Manhattan", state: "NY", latitude: 40.7075, longitude: -74.011, currentGrade: "B", currentScore: 18, gradeScale: "nyc_points", gradeSource: "nyc_dohmh", gradeCheckedAt: new Date(), lastInspectedAt: new Date("2026-08-01"), researchStatus: "ready", researchedAt: new Date(), summary: "Deli", supplierTerms: ["boar's head"], researchJson: { summary: "Deli", suppliers: [], riskSignals: [], sources: [] } },
+    });
+    await prisma.watchItem.create({ data: { userId: other.id, kind: "restaurant", label: "Capitol Deli", terms: ["capitol deli"], restaurantProfileId: profile.id } });
+
+    const search = await app.inject({ method: "GET", url: "/v1/premium/restaurants/search?q=capitol&lat=40.70&lng=-74.01", headers: auth() });
+    expect(search.statusCode).toBe(200);
+    expect(search.json().items[0]).toMatchObject({ profileId: profile.id, trackedBy: 1, researchStatus: "ready", activeRecalls: 1, watchItemId: null, grade: { grade: "B", level: "ok" } });
+    expect(search.json().items[0].distanceKm).toBeLessThan(1);
+    expect((await app.inject({ method: "GET", url: "/v1/premium/restaurants/search?q=capital%20delli", headers: auth() })).json().items[0]?.profileId).toBe(profile.id); // fuzzy
+    expect((await app.inject({ method: "GET", url: "/v1/premium/restaurants/search?q=zzzz", headers: auth() })).json().items).toEqual([]);
+
+    // Pick from the catalog: no name needed, instant research + grade, no new profile.
+    const profilesBefore = await prisma.restaurantProfile.count();
+    const picked = await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "restaurant", terms: [], restaurant: { profileId: profile.id } } });
+    expect(picked.statusCode).toBe(201);
+    expect(picked.json().item.label).toBe("Capitol Deli");
+    expect(picked.json().research.status).toBe("cached");
+    expect(await prisma.restaurantProfile.count()).toBe(profilesBefore);
+    const itemId = picked.json().item.id;
+    const detail = await app.inject({ method: "GET", url: `/v1/premium/restaurants/${itemId}`, headers: auth() });
+    expect(detail.json().grade).toMatchObject({ grade: "B", score: 18, level: "ok", label: "B — some violations" });
+    expect(detail.json().gradeCoverage).toBe("open_data");
+    expect(detail.json().shared.trackedBy).toBe(2);
+
+    // Grade refresh is throttled to daily; the catalog entry survives the user removing it.
+    const refresh = await app.inject({ method: "POST", url: `/v1/premium/restaurants/${itemId}/grade/refresh`, headers: auth() });
+    expect(refresh.json()).toMatchObject({ queued: false, reason: "too_recent" });
+    await prisma.restaurantNotice.create({ data: { userId, profileId: profile.id, kind: "grade_change", title: "Capitol Deli: health grade dropped to C", body: "C (was B).", data: { direction: "worse" } } });
+    const updates = await app.inject({ method: "GET", url: "/v1/premium/restaurants/updates", headers: auth() });
+    expect(updates.json().unread).toBe(1);
+    expect(updates.json().items[0]).toMatchObject({ restaurant: "Capitol Deli", watchItemId: itemId, kind: "grade_change" });
+    await app.inject({ method: "POST", url: "/v1/premium/restaurants/updates/read-all", headers: auth() });
+    expect((await app.inject({ method: "GET", url: "/v1/premium/restaurants/updates", headers: auth() })).json().unread).toBe(0);
+    expect((await app.inject({ method: "DELETE", url: `/v1/watchlist/${itemId}`, headers: auth() })).statusCode).toBe(204);
+    expect(await prisma.restaurantProfile.findUnique({ where: { id: profile.id } })).not.toBeNull();
+    expect((await app.inject({ method: "GET", url: "/v1/premium/restaurants/search?q=capitol", headers: auth() })).json().items[0].trackedBy).toBe(1);
+  });
+
   it("exposes package codes and remedy on recalls", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/recalls?q=jif" });
     const jif = res.json().items[0];

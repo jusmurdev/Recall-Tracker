@@ -107,3 +107,5 @@ export function useUpdatePreferences() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (body: UpdatePreferencesRequest) => api.updatePreferences(body), onSuccess: () => void qc.invalidateQueries({ queryKey: keys.me }) });
 }
+
+export const useRestaurantUpdates = (enabled: boolean) => useQuery({ queryKey: ["restaurant-updates"], queryFn: api.restaurantUpdates, enabled, refetchInterval: 5 * 60_000 });

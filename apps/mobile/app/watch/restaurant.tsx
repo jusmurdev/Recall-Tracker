@@ -1,9 +1,9 @@
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet } from "react-native";
-import type { NearbyRestaurant, RestaurantLookup } from "@recall/shared";
+import type { CatalogRestaurant, NearbyRestaurant, RestaurantLookup } from "@recall/shared";
 import { Pressable, Text, View } from "react-native";
-import { Body, Button, Card, Input, PremiumTag, Screen, Subtitle } from "@/components/ui";
+import { Body, Button, Card, GradeBadge, Input, PremiumTag, Screen, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { api, ApiError } from "@/api/client";
@@ -18,6 +18,34 @@ export default function NewRestaurant() {
   const [context, setContext] = useState("");
   const create = useCreateWatchItem();
   const [lookup, setLookup] = useState<RestaurantLookup | null>(null);
+  const [catalog, setCatalog] = useState<CatalogRestaurant[]>([]);
+  const [picked, setPicked] = useState<CatalogRestaurant | null>(null);
+
+  // Shared catalog: everything anyone has added, with research + health grade already attached.
+  useEffect(() => {
+    if (picked || name.trim().length < 2) {
+      setCatalog([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .restaurantSearch({ q: name.trim(), lat: loc.place?.latitude, lng: loc.place?.longitude, state: state.trim().length === 2 ? state.trim().toUpperCase() : undefined })
+        .then((r) => setCatalog(r.items))
+        .catch(() => setCatalog([]));
+    }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, state, picked]);
+
+  const pickCatalog = (c: CatalogRestaurant) => {
+    setPicked(c);
+    setName(c.name);
+    if (c.city) setCity(c.city);
+    if (c.state) setState(c.state);
+    if (c.website) setWebsite(c.website);
+    if (c.latitude != null && c.longitude != null) setCoords({ latitude: c.latitude, longitude: c.longitude });
+    setCatalog([]);
+  };
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [nearby, setNearby] = useState<NearbyRestaurant[]>([]);
   const loc = useLocationState();
@@ -71,6 +99,7 @@ export default function NewRestaurant() {
         context: context.trim() || undefined,
         categories: [],
         restaurant: {
+          profileId: picked?.profileId,
           name: name.trim(),
           city: city.trim() || undefined,
           state: state.trim().toUpperCase() || undefined,
@@ -113,7 +142,37 @@ export default function NewRestaurant() {
               ))}
             </View>
           ) : null}
-          <Input placeholder="Restaurant name" value={name} onChangeText={setName} />
+          <Input
+            placeholder="Restaurant name"
+            value={name}
+            onChangeText={(v) => {
+              setName(v);
+              if (picked && v !== picked.name) setPicked(null);
+            }}
+          />
+          {catalog.length ? (
+            <View style={{ gap: 6 }}>
+              <Body muted>Already in the catalog — tap to use (instant research &amp; grade)</Body>
+              {catalog.slice(0, 5).map((c) => (
+                <Pressable key={c.profileId} onPress={() => pickCatalog(c)} style={styles.nearby} accessibilityRole="button">
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.nearbyName}>{c.name}</Text>
+                    <Text style={styles.nearbyMeta}>
+                      {[c.city, c.state].filter(Boolean).join(", ")}
+                      {c.distanceKm != null ? ` · ${c.distanceKm} km` : ""} · tracked by {c.trackedBy} · {c.researchStatus === "ready" ? "researched" : "research pending"}
+                      {c.activeRecalls ? ` · ${c.activeRecalls} supplier recall${c.activeRecalls > 1 ? "s" : ""}` : ""}
+                    </Text>
+                  </View>
+                  <GradeBadge grade={c.grade} compact />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {picked ? (
+            <Body style={{ color: colors.accent }}>
+              Using the shared entry for {picked.name}{picked.grade.grade ? ` · health grade ${picked.grade.grade}` : ""}. Nothing to research.
+            </Body>
+          ) : null}
           <Input placeholder="City" value={city} onChangeText={setCity} />
           <Input placeholder="State (e.g. TX)" value={state} onChangeText={setState} autoCapitalize="characters" maxLength={2} />
           <Input placeholder="Website (optional)" value={website} onChangeText={setWebsite} autoCapitalize="none" keyboardType="url" />

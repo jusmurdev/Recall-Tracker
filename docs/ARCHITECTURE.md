@@ -105,6 +105,18 @@ Location is a phone-side capability with a deliberately thin server footprint:
   enter, the task fetches that restaurant's current supplier recalls and posts a local
   notification if any exist. Requires "Always" permission on iOS; toggled in Settings.
 
+## Restaurant catalog, grades and maintenance (`inspections/`)
+
+The restaurant catalog is a shared asset, not per-user data. `RestaurantProfile` holds the
+research, the health grade (`currentGrade`, `currentScore`, `gradeScale`, `gradeSource`), the
+venue's coordinates, and counters; `RestaurantInspection` keeps each inspection with its
+violations; `RestaurantNotice` records per-user events (grade change, first grade). Users
+search the catalog and link to an existing profile. Removing the item or deleting the account
+only unlinks. A daily job (`inspections/maintenance.ts`) re-checks grades older than
+`GRADE_REFRESH_DAYS` for tracked venues, refreshes stale research without charging anyone,
+and prunes only never-used profiles. Grade sources are pluggable adapters (NYC DOHMH, Chicago
+CDPH today) with an AI-research fallback for other jurisdictions.
+
 ## Notifications (`notifications/push.ts`, `prefs.ts`, `digest.ts`)
 
 Expo push in chunks of 100, tickets stored on the alert, `DeviceNotRegistered` disables the

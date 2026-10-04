@@ -52,6 +52,7 @@ export default function RootLayout() {
               <Stack.Screen name="watch/new" options={{ title: "Watch an item", presentation: "modal" }} />
               <Stack.Screen name="watch/restaurant" options={{ title: "Track a restaurant", presentation: "modal" }} />
               <Stack.Screen name="watch/subscribe" options={{ title: "Subscribe to categories", presentation: "modal" }} />
+              <Stack.Screen name="restaurant-updates" options={{ title: "Restaurant updates" }} />
               <Stack.Screen name="watch/[id]" options={{ title: "Watch item" }} />
               <Stack.Screen name="premium/index" options={{ title: "Premium" }} />
               <Stack.Screen name="premium/connectors" options={{ title: "Connected accounts" }} />

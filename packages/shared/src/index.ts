@@ -141,8 +141,8 @@ export type WatchItemKind = z.infer<typeof WatchItemKind>;
 
 export const CreateWatchItemRequest = z.object({
   kind: WatchItemKind,
-  /** Display label chosen by the user or derived from the input. */
-  label: z.string().trim().min(1).max(120),
+  /** Display label chosen by the user or derived from the input (defaults to the restaurant name for catalog picks). */
+  label: z.string().trim().max(120).default(""),
   /** Search terms (brand, product name). Required for product/scan/restaurant. */
   terms: z.array(z.string().trim().min(2).max(80)).max(20).default([]),
   upc: z.string().regex(/^\d{8,14}$/).optional(),
@@ -153,13 +153,15 @@ export const CreateWatchItemRequest = z.object({
   /** Restaurant metadata (premium). */
   restaurant: z
     .object({
-      name: z.string().trim().min(1).max(120),
+      name: z.string().trim().max(120).default(""),
       city: z.string().trim().max(80).optional(),
       state: z.string().length(2).toUpperCase().optional(),
       website: z.string().url().optional(),
       /** Venue coordinates (from the phone's location or a map pick). Enables geofence alerts. */
       latitude: z.number().min(-90).max(90).optional(),
       longitude: z.number().min(-180).max(180).optional(),
+      /** Pick an existing catalog restaurant instead of describing one; other fields are then optional. */
+      profileId: z.string().optional(),
     })
     .optional(),
   categories: z.array(RecallCategory).max(9).default([]),
@@ -341,6 +343,70 @@ export const RestaurantResearch = z.object({
     .nullable(),
 });
 
+/** How a jurisdiction expresses inspection results. */
+export const GradeScale = z.enum(["letter_abc", "score_100", "pass_fail", "nyc_points"]);
+export type GradeScale = z.infer<typeof GradeScale>;
+
+export const RestaurantGrade = z.object({
+  grade: z.string().nullable(),
+  score: z.number().int().nullable(),
+  scale: GradeScale.nullable(),
+  source: z.string().nullable(),
+  lastInspectedAt: z.string().datetime().nullable(),
+  checkedAt: z.string().datetime().nullable(),
+  /** Plain-language reading: "A — excellent", "Fail — closed pending re-inspection"… */
+  label: z.string().nullable(),
+  /** good | ok | poor | unknown — for colouring. */
+  level: z.enum(["good", "ok", "poor", "unknown"]),
+});
+export type RestaurantGrade = z.infer<typeof RestaurantGrade>;
+
+export const Inspection = z.object({
+  id: z.string(),
+  inspectedAt: z.string().datetime(),
+  grade: z.string().nullable(),
+  score: z.number().int().nullable(),
+  inspectionType: z.string().nullable(),
+  violations: z.array(z.object({ code: z.string().nullable(), description: z.string(), critical: z.boolean() })),
+  source: z.string(),
+  sourceUrl: z.string().nullable(),
+});
+export type Inspection = z.infer<typeof Inspection>;
+
+/** Something changed about a restaurant the user tracks (grade change, closure, research refresh). */
+export const RestaurantNotice = z.object({
+  id: z.string(),
+  profileId: z.string(),
+  restaurant: z.string(),
+  watchItemId: z.string().nullable(),
+  kind: z.enum(["grade_change", "grade_first", "closure", "research_updated"]),
+  title: z.string(),
+  body: z.string(),
+  data: z.record(z.unknown()).nullable(),
+  createdAt: z.string().datetime(),
+  readAt: z.string().datetime().nullable(),
+});
+export type RestaurantNotice = z.infer<typeof RestaurantNotice>;
+
+/** Catalog entry: a restaurant someone has already added, with its shared data. */
+export const CatalogRestaurant = z.object({
+  profileId: z.string(),
+  name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  website: z.string().nullable(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  distanceKm: z.number().nullable(),
+  trackedBy: z.number().int(),
+  researchStatus: z.enum(["pending", "researching", "ready", "failed"]),
+  researchedAt: z.string().datetime().nullable(),
+  grade: RestaurantGrade,
+  activeRecalls: z.number().int(),
+  watchItemId: z.string().nullable(),
+});
+export type CatalogRestaurant = z.infer<typeof CatalogRestaurant>;
+
 /** A known restaurant near the user, with whether its suppliers currently have recalls. */
 export const NearbyRestaurant = z.object({
   profileId: z.string(),
@@ -357,6 +423,7 @@ export const NearbyRestaurant = z.object({
   activeRecalls: z.number().int(),
   /** Whether the current user already tracks it (and the watch item id). */
   watchItemId: z.string().nullable(),
+  grade: RestaurantGrade,
 });
 export type NearbyRestaurant = z.infer<typeof NearbyRestaurant>;
 

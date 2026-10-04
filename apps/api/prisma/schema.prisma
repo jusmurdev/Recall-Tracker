@@ -158,6 +158,7 @@ model User {
   alerts     Alert[]
   connectors Connector[]
   aiUsage    AiUsage[]
+  restaurantNotices RestaurantNotice[]
 }
 
 model Device {
@@ -252,12 +253,70 @@ model RestaurantProfile {
   /// How many watch items reused the cache instead of triggering research.
   cacheHits       Int            @default(0)
   lastRequestedAt DateTime       @default(now())
+  /// --- Health inspection grade (shared, refreshed by the maintenance job) ---
+  /// Which adapter supplied the grade: nyc_dohmh, chicago_cdph, ai_research…
+  gradeSource     String?
+  /// Source-side identifier (e.g. NYC CAMIS, Chicago license number) for exact re-lookup.
+  gradeExternalId String?
+  /// Current grade as the jurisdiction expresses it: "A", "B", "C", "Pass", "Fail", "92"…
+  currentGrade    String?
+  /// Numeric score when the jurisdiction uses one (NYC: lower is better; many counties: 0–100 higher is better).
+  currentScore    Int?
+  /// How to read the grade: letter_abc | score_100 | pass_fail | nyc_points
+  gradeScale      String?
+  lastInspectedAt DateTime?
+  gradeCheckedAt  DateTime?
+  gradeError      String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  watchItems WatchItem[]
+  watchItems  WatchItem[]
+  inspections RestaurantInspection[]
+  notices     RestaurantNotice[]
 
   @@index([researchStatus, researchedAt])
+  @@index([gradeCheckedAt])
+  @@index([name])
+}
+
+/// One health inspection visit. Shared across users; kept even when nobody tracks the venue.
+model RestaurantInspection {
+  id          String            @id @default(cuid())
+  profileId   String
+  profile     RestaurantProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  source      String
+  inspectedAt DateTime
+  grade       String?
+  score       Int?
+  /// e.g. "Cycle Inspection / Initial Inspection", "Canvass", "Complaint"
+  inspectionType String?
+  /// [{ code, description, critical }]
+  violations  Json
+  sourceUrl   String?
+  createdAt   DateTime          @default(now())
+
+  @@unique([profileId, source, inspectedAt])
+  @@index([profileId, inspectedAt(sort: Desc)])
+}
+
+/// Something that changed about a tracked restaurant (grade change, closure…), per user.
+model RestaurantNotice {
+  id        String            @id @default(cuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId String
+  profile   RestaurantProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  /// Free-form details (previous/next grade, inspection date…)
+  data      Json?
+  createdAt DateTime          @default(now())
+  readAt    DateTime?
+  pushedAt  DateTime?
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([profileId, kind, createdAt(sort: Desc)])
 }
 
 enum MatchReason {
@@ -317,8 +376,9 @@ model Connector {
 /// Token/cost accounting for premium AI calls, per user, for quotas and billing insight.
 model AiUsage {
   id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Null for system-initiated work (scheduled research refreshes) that no user is charged for.
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   feature      String
   model        String
   inputTokens  Int

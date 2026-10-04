@@ -61,6 +61,12 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   per person and is refreshed only when stale.
 - **AI label identification.** When OCR fails (curved bottles, glare), the photo is identified
   by Claude vision and matched.
+- **Health grades.** Official inspection grades and violation history from health-department
+  open data (NYC and Chicago adapters; AI research elsewhere), refreshed weekly and shared.
+  Trackers are notified when a grade drops.
+- **Shared restaurant catalog.** Every restaurant anyone adds is kept with its research and
+  grade; others pick it from search and get results instantly. Nothing is lost when a user
+  removes it.
 - **Arrival alerts.** Tracked restaurants are pinned to coordinates; iOS/Android geofences
   give a heads-up when you walk into one whose suppliers have an active recall, and a "near
   me" lookup shows restaurants other users already track around you.
