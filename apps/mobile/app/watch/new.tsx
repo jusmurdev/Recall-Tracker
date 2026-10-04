@@ -1,62 +1,65 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
-import { ScrollView, Text } from "react-native";
-import { CATEGORY_LABEL, type RecallCategory } from "@recall/shared";
-import { Body, Button, Card, Input, Pill, RecallRow, Screen, Subtitle } from "@/components/ui";
+import { ScrollView, View } from "react-native";
+import { Body, Button, Card, Collapsible, Empty, Input, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
+import { whyAlert } from "@/lib/friendly";
 import { colors, spacing } from "@/lib/theme";
 
-const CATS: RecallCategory[] = ["food", "meat_poultry", "dietary_supplement", "veterinary", "cosmetic", "drug", "medical_device", "consumer_product"];
-
+/** One box. Type the thing you buy. We work out the rest. */
 export default function NewWatchItem() {
-  const [label, setLabel] = useState("");
-  const [terms, setTerms] = useState("");
+  const { prefill } = useLocalSearchParams<{ prefill?: string }>();
+  const [what, setWhat] = useState(prefill ?? "");
   const [upc, setUpc] = useState("");
   const [context, setContext] = useState("");
-  const [cats, setCats] = useState<RecallCategory[]>([]);
   const create = useCreateWatchItem();
 
   const submit = () => {
-    const termList = terms.split(/[,\n]/).map((t) => t.trim()).filter((t) => t.length >= 2);
+    const text = what.trim();
     const digits = upc.replace(/\D/g, "");
-    create.mutate({
-      kind: digits ? "upc" : "product",
-      label: label.trim() || termList[0] || digits,
-      terms: termList.length ? termList : label.trim() ? [label.trim()] : [],
-      upc: digits || undefined,
-      context: context.trim() || undefined,
-      categories: cats,
-    });
+    // Brand is usually the first word or two; the whole phrase is the label and a term too.
+    const words = text.split(/\s+/).filter(Boolean);
+    const terms = [...new Set([text, words.slice(0, 2).join(" "), words[0] ?? ""].map((t) => t.toLowerCase()).filter((t) => t.length >= 2))];
+    create.mutate({ kind: digits ? "upc" : "product", label: text || digits, terms, upc: digits || undefined, context: context.trim() || undefined, categories: [] });
   };
 
   const matches = create.data?.matches ?? [];
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
-        <Card>
-          <Subtitle>What are you watching?</Subtitle>
-          <Input placeholder="Name (e.g. Jif peanut butter)" value={label} onChangeText={setLabel} />
-          <Input placeholder="Brands or words to match, comma separated" value={terms} onChangeText={setTerms} autoCapitalize="none" />
-          <Input placeholder="Barcode (optional)" value={upc} onChangeText={setUpc} keyboardType="number-pad" />
-          <Input placeholder="Context (optional): bought at…, planning to buy, for the kids" value={context} onChangeText={setContext} />
-          <Body muted>Limit to categories (optional)</Body>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {CATS.map((c) => (
-              <Pill key={c} label={CATEGORY_LABEL[c]} active={cats.includes(c)} onPress={() => setCats((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))} />
-            ))}
-          </ScrollView>
-          <Button title="Start watching" loading={create.isPending} disabled={!label.trim() && !terms.trim() && !upc.trim()} onPress={submit} />
-          {create.error ? <Body style={{ color: colors.critical }}>{(create.error as Error).message}</Body> : null}
-        </Card>
-        {create.data ? (
+        {!create.data ? (
           <>
-            <Subtitle>{matches.length ? `Already recalled: ${matches.length} match${matches.length > 1 ? "es" : ""}` : "No current recalls — we'll alert you"}</Subtitle>
-            {matches.map((m) => (
-              <RecallRow key={m.recall.id} recall={m.recall} onPress={() => router.push(`/recall/${m.recall.id}`)} footer={<Text style={{ color: colors.accent, fontSize: 12 }}>{m.explanation}</Text>} />
-            ))}
-            <Button title="Done" variant="ghost" onPress={() => router.back()} />
+            <Card>
+              <Subtitle>What do you buy?</Subtitle>
+              <Input placeholder="e.g. Jif peanut butter, Similac formula" value={what} onChangeText={setWhat} autoFocus />
+              <Small>A brand name is enough. We'll match any recall that mentions it.</Small>
+              <Collapsible title="Add a barcode or a note (optional)">
+                <View style={{ gap: 10 }}>
+                  <Input placeholder="Barcode number" value={upc} onChangeText={setUpc} keyboardType="number-pad" />
+                  <Input placeholder="Note to self: bought at Costco, for the baby…" value={context} onChangeText={setContext} />
+                </View>
+              </Collapsible>
+              <Button title="Watch it" loading={create.isPending} disabled={!what.trim() && !upc.trim()} onPress={submit} />
+              {create.error ? <Body style={{ color: colors.critical }}>{(create.error as Error).message}</Body> : null}
+            </Card>
+            <Small style={{ textAlign: "center" }}>Tip: scanning a label from the Scan tab adds it here automatically.</Small>
           </>
-        ) : null}
+        ) : (
+          <>
+            {matches.length ? (
+              <Card tone={matches.some((m) => m.recall.severity === "critical") ? "critical" : "high"}>
+                <Subtitle>Heads up: this has already been recalled</Subtitle>
+                <Small>Check whether yours is one of the affected batches.</Small>
+              </Card>
+            ) : (
+              <Empty icon="checkmark-circle-outline" title={`We're watching "${create.data.item.label}"`} body="No recalls right now. If that changes, you'll know." />
+            )}
+            {matches.map((m) => (
+              <RecallRow key={m.recall.id} recall={m.recall} note={whyAlert({ reason: m.reason, watchItemLabel: create.data!.item.label })} onPress={() => router.push(`/recall/${m.recall.id}`)} />
+            ))}
+            <Button title="Done" onPress={() => router.back()} />
+          </>
+        )}
       </ScrollView>
     </Screen>
   );

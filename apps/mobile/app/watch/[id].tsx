@@ -1,7 +1,8 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import React from "react";
 import { Alert as RNAlert, Linking, ScrollView, Text, View } from "react-native";
-import { Body, Button, Card, GradeBadge, Loading, PremiumTag, RecallRow, Screen, Subtitle, Title, gradeColor } from "@/components/ui";
+import { Body, Button, Card, Collapsible, GradeBadge, Heading, Loading, PremiumTag, RecallRow, Screen, Small, Subtitle, Title, gradeColor } from "@/components/ui";
+import { gradeFriendly, whyAlert } from "@/lib/friendly";
 import { useDeleteWatchItem, useMe, useRestaurant, useWatchlist } from "@/hooks/queries";
 import { api } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
@@ -33,94 +34,71 @@ export default function WatchItemDetail() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: item.label }} />
+      <Stack.Screen options={{ title: "" }} />
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
         <Title>{item.label}</Title>
-        <Card>
-          <Subtitle>Matching on</Subtitle>
-          {item.upc ? <Body>Barcode {item.upc}</Body> : null}
-          {item.terms.length ? <Body>{item.terms.join(" · ")}</Body> : null}
-          {item.context ? <Body muted>Context: {item.context}</Body> : null}
-          {item.restaurant?.latitude != null && item.restaurant.longitude != null ? (
-            <Body muted>
-              Pinned location · arrival alerts {`(${item.restaurant.latitude.toFixed(3)}, ${item.restaurant.longitude.toFixed(3)})`}
-            </Body>
-          ) : item.kind === "restaurant" ? (
-            <Body muted>No location pinned, so arrival alerts are off for this restaurant.</Body>
-          ) : null}
-          {item.categories.length ? <Body muted>Categories: {item.categories.join(", ")}</Body> : null}
-          <Body muted>Added {new Date(item.createdAt).toLocaleDateString()}{item.importedFrom ? ` · imported from ${item.importedFrom}` : ""}</Body>
-        </Card>
+        {!isRestaurant ? (
+          <Card>
+            <Subtitle>We're watching for</Subtitle>
+            {item.upc ? <Body>Barcode {item.upc}</Body> : null}
+            {item.terms.length ? <Body>{item.terms.join(" · ")}</Body> : null}
+            {item.context ? <Small>Your note: {item.context}</Small> : null}
+          </Card>
+        ) : null}
 
         {isRestaurant && research.data ? (
-          <Card style={research.data.grade?.level ? { borderColor: gradeColor[research.data.grade.level] } : undefined}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Subtitle>Health inspection grade</Subtitle>
-              <GradeBadge grade={research.data.grade} />
-            </View>
-            {research.data.grade?.lastInspectedAt ? (
-              <Body muted>
-                Last inspected {new Date(research.data.grade.lastInspectedAt).toLocaleDateString()} · source {research.data.grade.source?.replace(/_/g, " ")}
-                {research.data.grade.checkedAt ? ` · checked ${new Date(research.data.grade.checkedAt).toLocaleDateString()}` : ""}
-              </Body>
-            ) : research.data.gradeCoverage === "none" || research.data.gradeError ? (
-              <Body muted>{research.data.gradeError ?? "No official inspection data for this area yet; research may still surface a grade."}</Body>
-            ) : (
-              <Body muted>Checking the health department's records…</Body>
-            )}
-            {research.data.inspections.length ? (
-              <View style={{ gap: 8 }}>
-                <Subtitle>History</Subtitle>
-                {research.data.inspections.slice(0, 5).map((i) => (
-                  <View key={i.id} style={{ gap: 2 }}>
-                    <Text style={{ color: colors.text, fontWeight: "600" }}>
-                      {new Date(i.inspectedAt).toLocaleDateString()} · {i.grade ?? (i.score != null ? `${i.score} pts` : "ungraded")}
-                      {i.inspectionType ? ` · ${i.inspectionType}` : ""}
-                    </Text>
-                    {i.violations.filter((v) => v.critical).slice(0, 3).map((v, idx) => (
-                      <Text key={idx} style={{ color: colors.high, fontSize: 12 }} numberOfLines={2}>
-                        ⚠ {v.description}
-                      </Text>
-                    ))}
-                    {i.violations.length > 3 || i.violations.some((v) => !v.critical) ? (
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>
-                        {i.violations.length} violation{i.violations.length === 1 ? "" : "s"} ({i.violations.filter((v) => v.critical).length} critical)
-                      </Text>
-                    ) : null}
-                    {i.sourceUrl ? (
-                      <Text style={{ color: colors.accent, fontSize: 12 }} onPress={() => void Linking.openURL(i.sourceUrl!)}>
-                        View official record ↗
-                      </Text>
-                    ) : null}
+          (() => {
+            const g = gradeFriendly(research.data.grade);
+            const tone = g.level === "good" ? "success" : g.level === "ok" ? "high" : g.level === "poor" ? "critical" : "soft";
+            return (
+              <Card tone={tone}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 24, fontWeight: "800", color: gradeColor[g.level] }}>{research.data.grade?.grade?.slice(0, 2) ?? (research.data.grade?.score ?? "?")}</Text>
                   </View>
-                ))}
-              </View>
-            ) : null}
-            <Button title="Re-check grade" variant="ghost" onPress={() => void api.refreshGrade(id).then(() => research.refetch())} />
-            {research.data.updates.length ? (
-              <View style={{ gap: 4 }}>
-                <Subtitle>Updates</Subtitle>
-                {research.data.updates.slice(0, 5).map((u) => (
-                  <Text key={u.id} style={{ color: colors.text, fontSize: 13 }}>
-                    {new Date(u.createdAt).toLocaleDateString()} · {u.title}
-                  </Text>
-                ))}
-              </View>
-            ) : null}
-          </Card>
+                  <View style={{ flex: 1 }}>
+                    <Heading>{g.title}</Heading>
+                    <Small>{g.body}</Small>
+                  </View>
+                </View>
+                {research.data.grade?.lastInspectedAt ? <Small>Last inspected {new Date(research.data.grade.lastInspectedAt).toLocaleDateString()} by the local health department.</Small> : research.data.gradeError ? <Small>{research.data.gradeError}</Small> : null}
+                {research.data.inspections.length ? (
+                  <Collapsible title="Inspection history">
+                    <View style={{ gap: 10 }}>
+                      {research.data.inspections.slice(0, 5).map((i) => (
+                        <View key={i.id} style={{ gap: 2 }}>
+                          <Body style={{ fontWeight: "700", fontSize: 15 }}>
+                            {new Date(i.inspectedAt).toLocaleDateString()} · {i.grade ?? (i.score != null ? `${i.score} pts` : "ungraded")}
+                          </Body>
+                          {i.violations.filter((v) => v.critical).slice(0, 2).map((v, idx) => (
+                            <Small key={idx} style={{ color: colors.high }}>⚠ {v.description}</Small>
+                          ))}
+                          {i.sourceUrl ? (
+                            <Text style={{ color: colors.accent, fontSize: 13 }} onPress={() => void Linking.openURL(i.sourceUrl!)}>
+                              Official record ↗
+                            </Text>
+                          ) : null}
+                        </View>
+                      ))}
+                      <Button title="Re-check grade" variant="ghost" onPress={() => void api.refreshGrade(id).then(() => research.refetch())} />
+                    </View>
+                  </Collapsible>
+                ) : null}
+              </Card>
+            );
+          })()
         ) : null}
 
         {isRestaurant ? (
           <Card>
-            <PremiumTag />
-            <Subtitle>Supplier research</Subtitle>
+            <Subtitle>Who supplies the kitchen</Subtitle>
             {research.data?.status === "ready" ? (
               <>
                 <Body>{research.data.summary}</Body>
-                {research.data.supplierTerms.length ? <Body muted>Suppliers & brands watched: {research.data.supplierTerms.join(", ")}</Body> : null}
+                {research.data.supplierTerms.length ? <Small>We watch recalls for: {research.data.supplierTerms.join(", ")}</Small> : null}
                 {research.data.riskSignals.length ? (
                   <>
-                    <Subtitle>Food-safety signals</Subtitle>
+                    <Subtitle>Things people have flagged</Subtitle>
                     {research.data.riskSignals.map((s, i) => (
                       <Text key={i} style={{ color: colors.high }} onPress={s.sourceUrl ? () => void Linking.openURL(s.sourceUrl!) : undefined}>
                         • {s.signal}
@@ -129,19 +107,13 @@ export default function WatchItemDetail() {
                     ))}
                   </>
                 ) : (
-                  <Body muted>No food-safety complaints or inspection problems found.</Body>
+                  <Small>No food-safety complaints found in reviews or inspections.</Small>
                 )}
-                {research.data.sources.length ? <Body muted>{research.data.sources.length} sources · researched {new Date(research.data.researchedAt!).toLocaleDateString()}</Body> : null}
-                {research.data.shared ? (
-                  <Body muted>
-                    Shared research: {research.data.shared.trackedBy} {research.data.shared.trackedBy === 1 ? "person tracks" : "people track"} this restaurant · researched{" "}
-                    {research.data.shared.researchCount}× · reused {research.data.shared.cacheHits}×
-                  </Body>
-                ) : null}
+                {research.data.shared ? <Small>{research.data.shared.trackedBy} {research.data.shared.trackedBy === 1 ? "person tracks" : "people track"} this place · checked {new Date(research.data.researchedAt!).toLocaleDateString()}</Small> : null}
                 {research.data.shared?.canRefresh ? (
                   <Button title="Re-run research" variant="ghost" onPress={() => void api.refreshRestaurant(id).then(() => research.refetch())} />
                 ) : (
-                  <Body muted style={{ fontSize: 12 }}>Research is refreshed automatically once it is a week old.</Body>
+                  <Small>We refresh this automatically.</Small>
                 )}
               </>
             ) : research.data?.status === "failed" ? (
@@ -150,18 +122,19 @@ export default function WatchItemDetail() {
                 <Button title="Try again" variant="ghost" onPress={() => void api.refreshRestaurant(id).then(() => research.refetch())} />
               </>
             ) : (
-              <Body muted>Researching this restaurant's suppliers and reviews. This usually takes a minute or two and is shared with everyone else who tracks it.</Body>
+              <Small>Looking into who supplies this kitchen. Usually a minute or two.</Small>
             )}
           </Card>
         ) : null}
 
-        <Subtitle>{isRestaurant ? "Recalls affecting suppliers" : "Recalls in the last year"}</Subtitle>
+        <Subtitle>{isRestaurant ? "Recalls touching this restaurant" : "Related recalls"}</Subtitle>
         {(isRestaurant ? (research.data?.matchedRecalls ?? []) : (matches.data?.matches ?? [])).map((m) => (
-          <RecallRow key={m.recall.id} recall={m.recall} onPress={() => router.push(`/recall/${m.recall.id}`)} footer={<Text style={{ color: colors.accent, fontSize: 12 }}>{m.explanation}</Text>} />
+          <RecallRow key={m.recall.id} recall={m.recall} note={whyAlert({ reason: m.reason, watchItemLabel: item.label })} onPress={() => router.push(`/recall/${m.recall.id}`)} />
         ))}
-        {!isRestaurant && matches.data && !matches.data.matches.length ? <Body muted>Nothing matches yet. You'll be notified the moment something does.</Body> : null}
+        {!isRestaurant && matches.data && !matches.data.matches.length ? <Small>Nothing so far. You'll hear the moment something matches.</Small> : null}
+        {isRestaurant && research.data && !research.data.matchedRecalls.length ? <Small>No supplier recalls right now.</Small> : null}
 
-        <Button title="Stop watching" variant="danger" onPress={remove} />
+        <Button title="Stop watching" variant="ghost" onPress={remove} />
       </ScrollView>
     </Screen>
   );

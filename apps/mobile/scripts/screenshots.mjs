@@ -14,7 +14,8 @@ const jif = recalls.items[0];
 const topAlert = alerts.items[0];
 
 const routes = [
-  ["01-recalls-feed", "/"],
+  ["01-home", "/"],
+  ["01a-browse", "/browse"],
   ["02-recall-detail", `/recall/${jif.id}`],
   ["03-scan", "/scan"],
   ["04-watchlist", "/watchlist"],
@@ -32,7 +33,7 @@ const routes = [
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium/chrome-linux/chrome" }).catch(() => chromium.launch());
 const iphone = devices["iPhone 14"];
-const context = await browser.newContext({ ...iphone, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: "dark", locale: "en-US", timezoneId: "America/Los_Angeles", permissions: [] });
+const context = await browser.newContext({ ...iphone, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: "light", locale: "en-US", timezoneId: "America/Los_Angeles", permissions: [] });
 await context.addInitScript((t) => {
   try { localStorage.setItem("recall.token", t); localStorage.setItem("recall.installId", "demo-install"); } catch {}
 }, token);
@@ -61,10 +62,10 @@ try {
 } catch (e) { console.log("FAIL 08b", e.message.split("\n")[0]); }
 // Interaction: type a product into the feed search
 try {
-  await page.goto("http://localhost:8080/", { waitUntil: "networkidle" });
-  await page.getByPlaceholder(/Search recalls/).fill("listeria");
+  await page.goto("http://localhost:8080/browse", { waitUntil: "networkidle" });
+  await page.getByPlaceholder(/Search a brand/).fill("listeria");
   await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${out}/01b-feed-search.png` });
+  await page.screenshot({ path: `${out}/01b-browse-search.png` });
   console.log("ok 01b");
 } catch (e) { console.log("FAIL 01b", e.message.split("\n")[0]); }
 console.log("errors:", [...new Set(errors)].slice(0, 15).join("\n") || "none");

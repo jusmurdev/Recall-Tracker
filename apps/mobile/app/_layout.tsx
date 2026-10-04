@@ -37,23 +37,25 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 3 * 24 * 3600_000, buster: "v1" }}>
           <Boot>
-            <StatusBar style="light" />
+            <StatusBar style="dark" />
             <Stack
               screenOptions={{
                 headerStyle: { backgroundColor: colors.bg },
+                headerShadowVisible: false,
                 headerTintColor: colors.text,
                 headerTitleStyle: { fontWeight: "700" },
+                headerBackButtonDisplayMode: "minimal",
                 contentStyle: { backgroundColor: colors.bg },
               }}
             >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="recall/[id]" options={{ title: "Recall" }} />
-              <Stack.Screen name="alert/[id]" options={{ title: "Alert" }} />
-              <Stack.Screen name="watch/new" options={{ title: "Watch an item", presentation: "modal" }} />
+              <Stack.Screen name="recall/[id]" options={{ title: "" }} />
+              <Stack.Screen name="alert/[id]" options={{ title: "" }} />
+              <Stack.Screen name="watch/new" options={{ title: "Watch a brand or product", presentation: "modal" }} />
               <Stack.Screen name="watch/restaurant" options={{ title: "Track a restaurant", presentation: "modal" }} />
-              <Stack.Screen name="watch/subscribe" options={{ title: "Subscribe to categories", presentation: "modal" }} />
+              <Stack.Screen name="watch/subscribe" options={{ title: "Follow a category", presentation: "modal" }} />
               <Stack.Screen name="restaurant-updates" options={{ title: "Restaurant updates" }} />
-              <Stack.Screen name="watch/[id]" options={{ title: "Watch item" }} />
+              <Stack.Screen name="watch/[id]" options={{ title: "" }} />
               <Stack.Screen name="premium/index" options={{ title: "Premium" }} />
               <Stack.Screen name="premium/connectors" options={{ title: "Connected accounts" }} />
             </Stack>

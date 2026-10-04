@@ -121,11 +121,8 @@ export default function NewRestaurant() {
     <Screen>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
         <Card>
-          <PremiumTag />
-          <Subtitle>Restaurant</Subtitle>
-          <Body muted>
-            We research who supplies the kitchen (distributors, brands, signature ingredients) and recent food-safety signals, then alert you when any supplier is recalled.
-          </Body>
+          <Subtitle>Which restaurant?</Subtitle>
+          <Body muted>We'll find its health grade and who supplies the kitchen, and tell you if either changes.</Body>
           <Button title={loc.busy ? "Locating…" : "I'm here — use my location"} variant="ghost" loading={loc.busy} onPress={() => void useMyLocation()} />
           {nearby.length ? (
             <View style={{ gap: 6 }}>
@@ -152,7 +149,7 @@ export default function NewRestaurant() {
           />
           {catalog.length ? (
             <View style={{ gap: 6 }}>
-              <Body muted>Already in the catalog — tap to use (instant research &amp; grade)</Body>
+              <Body muted>Already known — tap to use it</Body>
               {catalog.slice(0, 5).map((c) => (
                 <Pressable key={c.profileId} onPress={() => pickCatalog(c)} style={styles.nearby} accessibilityRole="button">
                   <View style={{ flex: 1 }}>
@@ -170,7 +167,7 @@ export default function NewRestaurant() {
           ) : null}
           {picked ? (
             <Body style={{ color: colors.accent }}>
-              Using the shared entry for {picked.name}{picked.grade.grade ? ` · health grade ${picked.grade.grade}` : ""}. Nothing to research.
+              Great, we already know {picked.name}{picked.grade.grade ? ` (health grade ${picked.grade.grade})` : ""}.
             </Body>
           ) : null}
           <Input placeholder="City" value={city} onChangeText={setCity} />
@@ -184,10 +181,10 @@ export default function NewRestaurant() {
           ) : lookup?.known ? (
             <Body muted>Known restaurant; research is {lookup.status === "researching" ? "in progress" : "being refreshed"}.</Body>
           ) : name.trim().length >= 3 ? (
-            <Body muted>New to us: research takes a minute or two and is then shared with everyone who tracks this place.</Body>
+            <Body muted>New to us. Give us a minute or two to look it up.</Body>
           ) : null}
           {coords ? <Body muted>Pinned at {coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)} — arrival alerts available.</Body> : null}
-          <Button title="Research & track" variant="premium" loading={create.isPending} disabled={name.trim().length < 2} onPress={() => void submit()} />
+          <Button title="Track it" variant="premium" icon="restaurant" loading={create.isPending} disabled={name.trim().length < 2} onPress={() => void submit()} />
           {create.error ? <Body style={{ color: colors.critical }}>{(create.error as Error).message}</Body> : null}
         </Card>
       </ScrollView>

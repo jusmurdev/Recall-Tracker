@@ -1,7 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type ViewProps, type ViewStyle } from "react-native";
-import { colors, severityColor, spacing } from "@/lib/theme";
-import { CATEGORY_LABEL, type Recall, type RecallSeverity, type RestaurantGrade } from "@recall/shared";
+import { Ionicons } from "@expo/vector-icons";
+import type { Recall, RecallSeverity, RestaurantGrade } from "@recall/shared";
+import { colors, radius, severityColor, severitySoft, spacing } from "@/lib/theme";
+import { CATEGORY_EMOJI, SEVERITY, headline, plainReason, relativeDay } from "@/lib/friendly";
 
 export function Screen({ children, style, ...rest }: ViewProps) {
   return (
@@ -11,9 +13,18 @@ export function Screen({ children, style, ...rest }: ViewProps) {
   );
 }
 
-export function Card({ children, style, ...rest }: ViewProps) {
+export function Card({ children, style, tone, ...rest }: ViewProps & { tone?: "default" | "soft" | "accent" | "critical" | "high" | "low" | "success" | "premium" }) {
+  const toneStyle =
+    tone === "accent" ? { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft }
+    : tone === "critical" ? { backgroundColor: colors.criticalSoft, borderColor: colors.criticalSoft }
+    : tone === "high" ? { backgroundColor: colors.highSoft, borderColor: colors.highSoft }
+    : tone === "low" ? { backgroundColor: colors.lowSoft, borderColor: colors.lowSoft }
+    : tone === "success" ? { backgroundColor: colors.successSoft, borderColor: colors.successSoft }
+    : tone === "premium" ? { backgroundColor: colors.premiumSoft, borderColor: colors.premiumSoft }
+    : tone === "soft" ? { backgroundColor: colors.cardAlt, borderColor: colors.cardAlt }
+    : null;
   return (
-    <View style={[styles.card, style]} {...rest}>
+    <View style={[styles.card, toneStyle, style]} {...rest}>
       {children}
     </View>
   );
@@ -22,31 +33,44 @@ export function Card({ children, style, ...rest }: ViewProps) {
 export function Title({ children }: { children: React.ReactNode }) {
   return <Text style={styles.title}>{children}</Text>;
 }
+export function Heading({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <Text style={[styles.heading, style]}>{children}</Text>;
+}
+/** Sentence-case section label (no shouting). */
 export function Subtitle({ children }: { children: React.ReactNode }) {
   return <Text style={styles.subtitle}>{children}</Text>;
 }
 export function Body({ children, muted, style }: { children: React.ReactNode; muted?: boolean; style?: object }) {
   return <Text style={[styles.body, muted && { color: colors.muted }, style]}>{children}</Text>;
 }
+export function Small({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <Text style={[styles.small, style]}>{children}</Text>;
+}
 
 export function Button({
   title,
   variant = "primary",
   loading,
+  icon,
   style,
   ...rest
-}: Omit<PressableProps, "style"> & { title: string; variant?: "primary" | "ghost" | "danger" | "premium"; loading?: boolean; style?: StyleProp<ViewStyle> }) {
-  const bg = variant === "primary" ? colors.accent : variant === "danger" ? colors.critical : variant === "premium" ? colors.premium : "transparent";
+}: Omit<PressableProps, "style"> & { title: string; variant?: "primary" | "secondary" | "ghost" | "danger" | "premium"; loading?: boolean; icon?: React.ComponentProps<typeof Ionicons>["name"]; style?: StyleProp<ViewStyle> }) {
+  const bg = variant === "primary" ? colors.accent : variant === "danger" ? colors.critical : variant === "premium" ? colors.premium : variant === "secondary" ? colors.accentSoft : "transparent";
+  const fg = variant === "secondary" ? colors.accent : variant === "ghost" ? colors.accent : "#fff";
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={title}
       style={({ pressed }) => [styles.button, { backgroundColor: bg, opacity: pressed || rest.disabled ? 0.6 : 1 }, variant === "ghost" && styles.ghost, style]}
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "ghost" ? colors.accent : colors.bg} />
+        <ActivityIndicator color={fg} />
       ) : (
-        <Text style={[styles.buttonText, variant === "ghost" && { color: colors.accent }]}>{title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {icon ? <Ionicons name={icon} size={18} color={fg} /> : null}
+          <Text style={[styles.buttonText, { color: fg }]}>{title}</Text>
+        </View>
       )}
     </Pressable>
   );
@@ -56,74 +80,126 @@ export function Input(props: TextInputProps) {
   return <TextInput placeholderTextColor={colors.muted} {...props} style={[styles.input, props.style]} />;
 }
 
-export function SeverityBadge({ severity }: { severity: RecallSeverity }) {
-  const label = severity === "critical" ? "Class I · Critical" : severity === "high" ? "Class II · High" : severity === "low" ? "Class III · Low" : "Unclassified";
+/** Friendly severity chip: "Serious" / "Moderate" / "Minor" with a dot, no class numbers. */
+export function SeverityChip({ severity, size = "sm" }: { severity: RecallSeverity; size?: "sm" | "lg" }) {
+  const s = SEVERITY[severity];
   return (
-    <View style={[styles.badge, { backgroundColor: severityColor[severity] }]}>
-      <Text style={styles.badgeText}>{label}</Text>
+    <View style={[styles.chip, { backgroundColor: severitySoft[severity] }, size === "lg" && { paddingVertical: 6, paddingHorizontal: 12 }]} accessibilityLabel={`${s.label} recall`}>
+      <View style={[styles.dot, { backgroundColor: severityColor[severity] }]} />
+      <Text style={[styles.chipText, { color: severityColor[severity] }, size === "lg" && { fontSize: 14 }]}>{s.label}</Text>
     </View>
   );
 }
+/** Back-compat alias. */
+export const SeverityBadge = SeverityChip;
 
-export function Pill({ label, active, onPress }: { label: string; active?: boolean; onPress?: () => void }) {
+export function Pill({ label, active, onPress, icon }: { label: string; active?: boolean; onPress?: () => void; icon?: React.ComponentProps<typeof Ionicons>["name"] }) {
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected: !!active }} accessibilityLabel={label} onPress={onPress} style={[styles.pill, active && { backgroundColor: colors.accent, borderColor: colors.accent }]}>
-      <Text style={[styles.pillText, active && { color: colors.bg, fontWeight: "700" }]}>{label}</Text>
+      {icon ? <Ionicons name={icon} size={14} color={active ? "#fff" : colors.muted} /> : null}
+      <Text style={[styles.pillText, active && { color: "#fff", fontWeight: "700" }]}>{label}</Text>
     </Pressable>
-  );
-}
-
-export const gradeColor: Record<RestaurantGrade["level"], string> = { good: colors.accent, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
-
-/** Health inspection grade chip: letter/score with a traffic-light colour. */
-export function GradeBadge({ grade, compact }: { grade: RestaurantGrade | null | undefined; compact?: boolean }) {
-  if (!grade || (!grade.grade && grade.score == null)) {
-    return compact ? null : (
-      <View style={[styles.badge, { backgroundColor: colors.border }]}>
-        <Text style={[styles.badgeText, { color: colors.muted }]}>NO GRADE YET</Text>
-      </View>
-    );
-  }
-  const text = compact ? (grade.grade ?? String(grade.score)) : (grade.label ?? grade.grade ?? String(grade.score));
-  return (
-    <View style={[styles.badge, { backgroundColor: gradeColor[grade.level] }]} accessibilityLabel={`Health grade ${text}`}>
-      <Text style={styles.badgeText}>{compact ? text : `HEALTH ${text.toUpperCase()}`}</Text>
-    </View>
   );
 }
 
 export function PremiumTag() {
   return (
-    <View style={[styles.badge, { backgroundColor: colors.premium }]}>
-      <Text style={styles.badgeText}>PREMIUM</Text>
+    <View style={[styles.chip, { backgroundColor: colors.premiumSoft }]}>
+      <Ionicons name="sparkles" size={12} color={colors.premium} />
+      <Text style={[styles.chipText, { color: colors.premium }]}>Premium</Text>
     </View>
   );
 }
 
-export function RecallRow({ recall, onPress, footer }: { recall: Recall; onPress: () => void; footer?: React.ReactNode }) {
-  const date = new Date(recall.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+export const gradeColor: Record<RestaurantGrade["level"], string> = { good: colors.success, ok: colors.high, poor: colors.critical, unknown: colors.unknown };
+const gradeSoft: Record<RestaurantGrade["level"], string> = { good: colors.successSoft, ok: colors.highSoft, poor: colors.criticalSoft, unknown: colors.unknownSoft };
+
+/** Health grade chip. */
+export function GradeBadge({ grade, compact }: { grade: RestaurantGrade | null | undefined; compact?: boolean }) {
+  if (!grade || (!grade.grade && grade.score == null)) {
+    return compact ? null : (
+      <View style={[styles.chip, { backgroundColor: colors.unknownSoft }]}>
+        <Text style={[styles.chipText, { color: colors.muted }]}>No grade yet</Text>
+      </View>
+    );
+  }
+  const text = grade.grade ?? String(grade.score);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${recall.severity} recall: ${recall.title}`} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-      <View style={[styles.stripe, { backgroundColor: severityColor[recall.severity] }]} />
+    <View style={[styles.chip, { backgroundColor: gradeSoft[grade.level] }]} accessibilityLabel={`Health grade ${text}`}>
+      <Ionicons name="medkit-outline" size={12} color={gradeColor[grade.level]} />
+      <Text style={[styles.chipText, { color: gradeColor[grade.level] }]}>{compact ? text : `Health ${text}`}</Text>
+    </View>
+  );
+}
+
+/**
+ * Recall card for lists: emoji, plain headline, plain reason, friendly severity. Agency, category
+ * and dates live on the detail page.
+ */
+export function RecallRow({ recall, onPress, footer, note }: { recall: Recall; onPress: () => void; footer?: React.ReactNode; note?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${SEVERITY[recall.severity].label} recall: ${headline(recall)}`} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]}>
+      <View style={[styles.emojiBox, { backgroundColor: severitySoft[recall.severity] }]}>
+        <Text style={{ fontSize: 22 }}>{CATEGORY_EMOJI[recall.category]}</Text>
+      </View>
       <View style={{ flex: 1, gap: 4 }}>
         <Text style={styles.rowTitle} numberOfLines={2}>
-          {recall.title}
-        </Text>
-        <Text style={styles.rowMeta}>
-          {recall.source} · {CATEGORY_LABEL[recall.category]} · {date}
+          {headline(recall)}
         </Text>
         <Text style={styles.rowReason} numberOfLines={2}>
-          {recall.reason}
+          {plainReason(recall.reason, recall.summary)}
         </Text>
+        {note ? (
+          <Text style={styles.rowNote} numberOfLines={2}>
+            {note}
+          </Text>
+        ) : null}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
+          <SeverityChip severity={recall.severity} />
+          <Text style={styles.rowMeta}>{relativeDay(recall.publishedAt)}</Text>
+        </View>
         {footer}
       </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.border} />
     </Pressable>
   );
 }
 
-export function Empty({ title, body }: { title: string; body?: string }) {
+/** Big tappable tile for the main actions ("Scan a label", "Add a brand"). */
+export function ActionTile({ icon, title, subtitle, onPress, tone = "accent" }: { icon: React.ComponentProps<typeof Ionicons>["name"]; title: string; subtitle?: string; onPress: () => void; tone?: "accent" | "premium" | "soft" }) {
+  const bg = tone === "premium" ? colors.premiumSoft : tone === "soft" ? colors.cardAlt : colors.accentSoft;
+  const fg = tone === "premium" ? colors.premium : colors.accent;
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={({ pressed }) => [styles.tile, { backgroundColor: bg, opacity: pressed ? 0.8 : 1 }]}>
+      <View style={[styles.tileIcon, { backgroundColor: colors.card }]}>
+        <Ionicons name={icon} size={22} color={fg} />
+      </View>
+      <Text style={styles.tileTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.tileSub}>{subtitle}</Text> : null}
+    </Pressable>
+  );
+}
+
+/** "Show details" disclosure so the default view stays calm. */
+export function Collapsible({ title, children, initiallyOpen = false }: { title: string; children: React.ReactNode; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
+  return (
+    <View style={{ gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} style={styles.disclosure}>
+        <Text style={styles.disclosureText}>{title}</Text>
+        <Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={colors.accent} />
+      </Pressable>
+      {open ? children : null}
+    </View>
+  );
+}
+
+export function Empty({ title, body, icon = "leaf-outline" }: { title: string; body?: string; icon?: React.ComponentProps<typeof Ionicons>["name"] }) {
   return (
     <View style={styles.empty}>
+      <View style={styles.emptyIcon}>
+        <Ionicons name={icon} size={28} color={colors.accent} />
+      </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
     </View>
@@ -140,24 +216,35 @@ export function Loading() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  card: { backgroundColor: colors.card, borderRadius: 14, padding: spacing(2), borderWidth: 1, borderColor: colors.border, gap: 8 },
-  title: { color: colors.text, fontSize: 24, fontWeight: "800" },
-  subtitle: { color: colors.muted, fontSize: 14, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 },
-  body: { color: colors.text, fontSize: 15, lineHeight: 21 },
-  button: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12, alignItems: "center", justifyContent: "center", minHeight: 46 },
-  ghost: { borderWidth: 1, borderColor: colors.accent },
-  buttonText: { color: colors.bg, fontWeight: "700", fontSize: 15 },
-  input: { backgroundColor: colors.cardAlt, color: colors.text, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, borderWidth: 1, borderColor: colors.border },
-  badge: { alignSelf: "flex-start", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { color: "#0B1F2A", fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
-  pill: { borderWidth: 1, borderColor: colors.border, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8 },
-  pillText: { color: colors.text, fontSize: 13 },
-  row: { flexDirection: "row", gap: 12, padding: spacing(2), backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
-  stripe: { width: 4, borderRadius: 2 },
-  rowTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
+  card: { backgroundColor: colors.card, borderRadius: radius.md, padding: spacing(2), borderWidth: 1, borderColor: colors.border, gap: 10 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
+  heading: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  subtitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  body: { color: colors.text, fontSize: 16, lineHeight: 23 },
+  small: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  button: { paddingVertical: 14, paddingHorizontal: 20, borderRadius: radius.md, alignItems: "center", justifyContent: "center", minHeight: 50 },
+  ghost: { borderWidth: 1.5, borderColor: colors.accentSoft },
+  buttonText: { fontWeight: "700", fontSize: 16 },
+  input: { backgroundColor: colors.card, color: colors.text, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, borderWidth: 1, borderColor: colors.border },
+  chip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  chipText: { fontSize: 12, fontWeight: "700" },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  pill: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginRight: 8 },
+  pillText: { color: colors.text, fontSize: 14 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, padding: spacing(2), backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  emojiBox: { width: 48, height: 48, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  rowTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  rowReason: { color: colors.muted, fontSize: 14 },
+  rowNote: { color: colors.accent, fontSize: 13 },
   rowMeta: { color: colors.muted, fontSize: 12 },
-  rowReason: { color: colors.text, fontSize: 13, opacity: 0.85 },
-  empty: { padding: spacing(4), alignItems: "center", gap: 6 },
-  emptyTitle: { color: colors.text, fontSize: 17, fontWeight: "700", textAlign: "center" },
-  emptyBody: { color: colors.muted, fontSize: 14, textAlign: "center" },
+  tile: { flex: 1, borderRadius: radius.lg, padding: spacing(2), gap: 8, minHeight: 118 },
+  tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  tileTitle: { color: colors.text, fontSize: 16, fontWeight: "700" },
+  tileSub: { color: colors.muted, fontSize: 13 },
+  disclosure: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 6 },
+  disclosureText: { color: colors.accent, fontWeight: "700", fontSize: 15 },
+  empty: { padding: spacing(4), alignItems: "center", gap: 8 },
+  emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "700", textAlign: "center" },
+  emptyBody: { color: colors.muted, fontSize: 15, textAlign: "center", lineHeight: 21 },
 });

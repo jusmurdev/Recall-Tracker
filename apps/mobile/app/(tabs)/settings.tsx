@@ -1,19 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert as RNAlert, Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { CATEGORY_LABEL, type RecallCategory, type RecallSeverity } from "@recall/shared";
-import { Pill } from "@/components/ui";
-import { useUpdatePreferences } from "@/hooks/queries";
-import { setToken } from "@/lib/auth";
+import { Alert as RNAlert, Linking, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
+import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { api } from "@/api/client";
-import { Body, Button, Card, PremiumTag, Screen, Subtitle } from "@/components/ui";
-import { useMe, useStats, useWatchlist } from "@/hooks/queries";
+import { Body, Button, Card, Collapsible, Pill, PremiumTag, Screen, Small, Subtitle, Title } from "@/components/ui";
+import { useMe, useStats, useUpdatePreferences, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
+import { setToken } from "@/lib/auth";
 import { apiBaseUrl } from "@/lib/config";
+import { CATEGORY_EMOJI, CATEGORY_FRIENDLY } from "@/lib/friendly";
 import { geofenceSupported, isGeofencingActive, stopGeofences, syncGeofences } from "@/lib/geofence";
 import { requestBackgroundPermission } from "@/lib/location";
-import { colors, spacing } from "@/lib/theme";
+import { colors, radius, spacing } from "@/lib/theme";
+
+const SEV: Array<{ v: RecallSeverity; label: string }> = [
+  { v: "unknown", label: "Everything" },
+  { v: "high", label: "Serious & moderate" },
+  { v: "critical", label: "Only serious" },
+];
+const CATS: RecallCategory[] = ["food", "meat_poultry", "veterinary", "dietary_supplement", "cosmetic", "drug", "consumer_product", "medical_device"];
+const fmtHour = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
 
 export default function SettingsScreen() {
   const me = useMe();
@@ -22,39 +31,15 @@ export default function SettingsScreen() {
   const loc = useLocationState();
   const qc = useQueryClient();
   const premium = me.data?.tier === "premium";
+  const prefs = me.data?.preferences;
+  const update = useUpdatePreferences();
+  const setPref = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
   const [geofences, setGeofences] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
   useEffect(() => {
     void isGeofencingActive().then(setGeofences);
   }, []);
   const trackedRestaurants = (list.data?.items ?? []).filter((w) => w.kind === "restaurant" && w.restaurant?.latitude != null).length;
-  const prefs = me.data?.preferences;
-  const update = useUpdatePreferences();
-  const setPref = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
-  const SEV: Array<{ v: RecallSeverity; label: string }> = [
-    { v: "unknown", label: "All" },
-    { v: "low", label: "Class III+" },
-    { v: "high", label: "Class II+" },
-    { v: "critical", label: "Class I only" },
-  ];
-  const CATS: RecallCategory[] = ["food", "meat_poultry", "dietary_supplement", "veterinary", "cosmetic", "drug", "medical_device", "consumer_product"];
-  const HOURS = Array.from({ length: 24 }, (_, h) => h);
-  const fmtHour = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`;
-
-  const deleteAccount = () =>
-    RNAlert.alert("Delete your data?", "This removes your watchlist, alerts, connected accounts and device registrations. It cannot be undone.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete everything",
-        style: "destructive",
-        onPress: async () => {
-          await api.deleteAccount();
-          await setToken("");
-          qc.clear();
-          RNAlert.alert("Deleted", "Your data has been removed. The app will start fresh.");
-        },
-      },
-    ]);
 
   const toggleGeofences = async (on: boolean) => {
     setGeoBusy(true);
@@ -65,10 +50,7 @@ export default function SettingsScreen() {
         return;
       }
       const ok = await requestBackgroundPermission();
-      if (!ok) {
-        setGeofences(false);
-        return;
-      }
+      if (!ok) return setGeofences(false);
       const n = await syncGeofences(list.data?.items ?? []);
       setGeofences(n > 0 || trackedRestaurants === 0);
     } finally {
@@ -76,166 +58,162 @@ export default function SettingsScreen() {
     }
   };
 
+  const deleteAccount = () =>
+    RNAlert.alert("Delete everything?", "Your watchlist, alerts and connected accounts will be removed. This can't be undone.", [
+      { text: "Keep my data", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          await api.deleteAccount();
+          await setToken("");
+          qc.clear();
+          RNAlert.alert("Done", "Your data has been deleted.");
+        },
+      },
+    ]);
+
   return (
-    <Screen>
-      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }}>
-        <Card>
-          <Subtitle>Location</Subtitle>
-          <Body>
-            {me.data?.homeState ? `Home state: ${me.data.homeState}` : "Home state not set"}
-            {me.data?.lastKnownState && me.data.lastKnownState !== me.data.homeState ? ` · currently in ${me.data.lastKnownState}` : ""}
-          </Body>
-          <Body muted>
-            Recalls sold in your state rank higher in alerts, and the feed can filter to what is sold near you. Location is resolved on your phone; only the state name is sent to our servers.
-          </Body>
-          {loc.permission === "granted" && loc.place ? (
-            <Body muted>Detected: {[loc.place.city, loc.place.state].filter(Boolean).join(", ") || "outside the US"}</Body>
-          ) : null}
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button title={loc.busy ? "Locating…" : "Use my location"} style={{ flex: 1 }} loading={loc.busy} onPress={() => void loc.refresh({ ask: true })} />
-            <Button
-              title="Set as home"
-              variant="ghost"
-              disabled={!loc.state}
-              onPress={() => void loc.refresh({ ask: true, setHome: true }).then(() => qc.invalidateQueries({ queryKey: ["me"] }))}
-            />
-          </View>
-          {loc.permission === "denied" ? <Button title="Open Settings to allow location" variant="ghost" onPress={() => void Linking.openSettings()} /> : null}
-        </Card>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
+      <Screen>
+        <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(6) }}>
+          <Title>You</Title>
 
-        <Card>
-          <Subtitle>Notifications</Subtitle>
-          {prefs ? (
-            <>
-              <Body muted>Push me about</Body>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {SEV.map((s) => (
-                  <Pill key={s.v} label={s.label} active={prefs.pushMinSeverity === s.v} onPress={() => setPref({ pushMinSeverity: s.v })} />
-                ))}
-              </ScrollView>
-              <Body muted>Mute categories (still shown in the inbox)</Body>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {CATS.map((c) => (
-                  <Pill
-                    key={c}
-                    label={CATEGORY_LABEL[c]}
-                    active={prefs.mutedCategories.includes(c)}
-                    onPress={() => setPref({ mutedCategories: prefs.mutedCategories.includes(c) ? prefs.mutedCategories.filter((x) => x !== c) : [...prefs.mutedCategories, c] })}
-                  />
-                ))}
-              </ScrollView>
-              <View style={styles.switchRow}>
-                <Body style={{ flex: 1 }}>Daily digest instead of one push per alert (critical recalls still arrive immediately)</Body>
-                <Switch value={prefs.digestMode} onValueChange={(v) => setPref({ digestMode: v })} trackColor={{ true: colors.accent }} />
+          <Pressable onPress={() => router.push(premium ? "/premium/connectors" : "/premium")} accessibilityRole="button">
+            <Card tone="premium">
+              <View style={styles.row}>
+                <Ionicons name="sparkles" size={22} color={colors.premium} />
+                <View style={{ flex: 1 }}>
+                  <Body style={{ fontWeight: "700" }}>{premium ? "You're on Premium" : "Try Premium"}</Body>
+                  <Small>{premium ? "Manage connected accounts" : "Restaurant grades, supplier alerts, import your shopping"}</Small>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </View>
-              {prefs.digestMode ? (
-                <>
-                  <Body muted>Digest time</Body>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {[7, 8, 9, 12, 18, 20].map((h) => (
-                      <Pill key={h} label={fmtHour(h)} active={prefs.digestHour === h} onPress={() => setPref({ digestHour: h })} />
-                    ))}
-                  </ScrollView>
-                </>
-              ) : null}
-              <View style={styles.switchRow}>
-                <Body style={{ flex: 1 }}>Quiet hours (non-critical pushes wait until the window ends)</Body>
-                <Switch
-                  value={prefs.quietHoursStart != null}
-                  onValueChange={(v) => setPref(v ? { quietHoursStart: 22, quietHoursEnd: 7 } : { quietHoursStart: null, quietHoursEnd: null })}
-                  trackColor={{ true: colors.accent }}
-                />
-              </View>
-              {prefs.quietHoursStart != null ? (
-                <>
-                  <Body muted>From</Body>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {HOURS.map((h) => (
-                      <Pill key={h} label={fmtHour(h)} active={prefs.quietHoursStart === h} onPress={() => setPref({ quietHoursStart: h, quietHoursEnd: prefs.quietHoursEnd ?? 7 })} />
-                    ))}
-                  </ScrollView>
-                  <Body muted>Until</Body>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {HOURS.map((h) => (
-                      <Pill key={h} label={fmtHour(h)} active={prefs.quietHoursEnd === h} onPress={() => setPref({ quietHoursStart: prefs.quietHoursStart ?? 22, quietHoursEnd: h })} />
-                    ))}
-                  </ScrollView>
-                </>
-              ) : null}
-              <Body muted style={{ fontSize: 12 }}>Times use {prefs.timezone ?? "your phone's time zone"}.</Body>
-            </>
-          ) : (
-            <Body muted>Loading…</Body>
-          )}
-        </Card>
+            </Card>
+          </Pressable>
 
-        {premium && geofenceSupported() ? (
           <Card>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Subtitle>Restaurant arrival alerts</Subtitle>
-              <PremiumTag />
+            <Subtitle>Where you are</Subtitle>
+            <Body>{me.data?.homeState ? `Home: ${me.data.homeState}${me.data.lastKnownState && me.data.lastKnownState !== me.data.homeState ? ` · now in ${me.data.lastKnownState}` : ""}` : "We don't know your state yet"}</Body>
+            <Small>Recalls sold near you come first. We only ever save the state, never your exact location.</Small>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Button title={loc.busy ? "Finding you…" : "Use my location"} icon="locate" style={{ flex: 1 }} loading={loc.busy} onPress={() => void loc.refresh({ ask: true, setHome: !me.data?.homeState })} />
+              {loc.state ? <Button title="Set as home" variant="secondary" onPress={() => void loc.refresh({ ask: true, setHome: true })} /> : null}
             </View>
-            <View style={styles.switchRow}>
-              <Body style={{ flex: 1 }}>Heads-up when you arrive at a tracked restaurant whose suppliers have an active recall</Body>
-              <Switch value={geofences} disabled={geoBusy} onValueChange={(v) => void toggleGeofences(v)} trackColor={{ true: colors.accent }} />
-            </View>
-            <Body muted>
-              Uses {Platform.OS === "ios" ? "'Always' location" : "background location"} for geofences around your tracked restaurants ({trackedRestaurants} with a location, up to 20). Nothing is uploaded; the check runs on your phone.
-            </Body>
+            {loc.permission === "denied" ? <Button title="Allow location in Settings" variant="ghost" onPress={() => void Linking.openSettings()} /> : null}
           </Card>
-        ) : null}
 
-        <Card>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Subtitle>Plan</Subtitle>
-            {premium ? <PremiumTag /> : null}
-          </View>
-          <Body>{premium ? "Premium: connected accounts, restaurant tracking and AI label identification are on." : "Free: unlimited recall browsing, label scanning and alerts for up to 50 watched items."}</Body>
-          {!premium ? <Button title="See Premium" variant="premium" onPress={() => router.push("/premium")} /> : <Button title="Connected accounts" onPress={() => router.push("/premium/connectors")} />}
-        </Card>
+          <Card>
+            <Subtitle>Notifications</Subtitle>
+            {prefs ? (
+              <>
+                <Small>Tell me about</Small>
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {SEV.map((s) => (
+                    <Pill key={s.v} label={s.label} active={prefs.pushMinSeverity === s.v} onPress={() => setPref({ pushMinSeverity: s.v })} />
+                  ))}
+                </View>
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Body>Quiet hours</Body>
+                    <Small>{prefs.quietHoursStart != null ? `Non-urgent alerts wait until ${fmtHour(prefs.quietHoursEnd ?? 7)}` : "Hold non-urgent alerts overnight"}</Small>
+                  </View>
+                  <Switch value={prefs.quietHoursStart != null} onValueChange={(v) => setPref(v ? { quietHoursStart: 22, quietHoursEnd: 7 } : { quietHoursStart: null, quietHoursEnd: null })} trackColor={{ true: colors.accent }} />
+                </View>
+                <View style={styles.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Body>One daily summary</Body>
+                    <Small>Instead of a buzz per alert. Serious recalls still come straight away.</Small>
+                  </View>
+                  <Switch value={prefs.digestMode} onValueChange={(v) => setPref({ digestMode: v })} trackColor={{ true: colors.accent }} />
+                </View>
+                <Collapsible title="More options">
+                  <View style={{ gap: 10 }}>
+                    {prefs.digestMode ? (
+                      <>
+                        <Small>Summary time</Small>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          {[7, 8, 9, 12, 18, 20].map((h) => (
+                            <Pill key={h} label={fmtHour(h)} active={prefs.digestHour === h} onPress={() => setPref({ digestHour: h })} />
+                          ))}
+                        </ScrollView>
+                      </>
+                    ) : null}
+                    {prefs.quietHoursStart != null ? (
+                      <>
+                        <Small>Quiet from / until</Small>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          {[20, 21, 22, 23].map((h) => (
+                            <Pill key={h} label={fmtHour(h)} active={prefs.quietHoursStart === h} onPress={() => setPref({ quietHoursStart: h, quietHoursEnd: prefs.quietHoursEnd ?? 7 })} />
+                          ))}
+                          {[6, 7, 8, 9].map((h) => (
+                            <Pill key={h} label={`until ${fmtHour(h)}`} active={prefs.quietHoursEnd === h} onPress={() => setPref({ quietHoursStart: prefs.quietHoursStart ?? 22, quietHoursEnd: h })} />
+                          ))}
+                        </ScrollView>
+                      </>
+                    ) : null}
+                    <Small>Don't buzz me about</Small>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                      {CATS.map((c) => (
+                        <Pill
+                          key={c}
+                          label={`${CATEGORY_EMOJI[c]} ${CATEGORY_FRIENDLY[c]}`}
+                          active={prefs.mutedCategories.includes(c)}
+                          onPress={() => setPref({ mutedCategories: prefs.mutedCategories.includes(c) ? prefs.mutedCategories.filter((x) => x !== c) : [...prefs.mutedCategories, c] })}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </Collapsible>
+              </>
+            ) : (
+              <Small>Loading…</Small>
+            )}
+          </Card>
 
-        <Card>
-          <Subtitle>Data sources</Subtitle>
-          {(stats.data?.sources ?? []).map((s) => (
-            <View key={s.source} style={styles.sourceRow}>
-              <Text style={styles.sourceName}>{SOURCE_LABEL[s.source] ?? s.source}</Text>
-              <Text style={[styles.sourceStatus, { color: s.healthy ? colors.accent : colors.high }]}>
-                {s.lastSuccessAt ? `synced ${new Date(s.lastSuccessAt).toLocaleString()}` : "not yet synced"}
-              </Text>
-            </View>
-          ))}
-          <Body muted>
-            Recalls are pulled into one shared database a few times a day from the FDA, USDA FSIS and CPSC. Your phone never queries government servers directly.
-          </Body>
-        </Card>
+          {premium && geofenceSupported() ? (
+            <Card>
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <Body>Heads-up when I arrive</Body>
+                  <Small>A nudge if you walk into a tracked restaurant with a supplier recall. Needs "Always" location.</Small>
+                </View>
+                <Switch value={geofences} disabled={geoBusy} onValueChange={(v) => void toggleGeofences(v)} trackColor={{ true: colors.accent }} />
+              </View>
+            </Card>
+          ) : null}
 
-        <Card>
-          <Subtitle>About</Subtitle>
-          <Body muted>
-            This app surfaces official recall notices only. It does not replace guidance from the issuing agency: always follow the instructions in the recall itself.
-          </Body>
-          <Button title="FDA recalls" variant="ghost" onPress={() => void Linking.openURL("https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts")} />
-          <Button title="USDA FSIS recalls" variant="ghost" onPress={() => void Linking.openURL("https://www.fsis.usda.gov/recalls")} />
-          <Body muted style={{ fontSize: 12 }}>
-            API: {apiBaseUrl()} · User {me.data?.id ?? "…"}
-          </Body>
-        </Card>
-
-        <Card>
-          <Subtitle>Your data</Subtitle>
-          <Body muted>We store your watchlist, alerts, connected accounts and your state (never precise location). Delete it all at any time.</Body>
-          <Button title="Delete my data" variant="danger" onPress={deleteAccount} />
-        </Card>
-      </ScrollView>
-    </Screen>
+          <Card>
+            <Collapsible title="About this app">
+              <View style={{ gap: 8 }}>
+                <Small>
+                  We pull every recall a few times a day from the FDA, USDA and CPSC into one place, so your phone never has to. This app surfaces official notices; always follow the instructions in the recall itself.
+                </Small>
+                {(stats.data?.sources ?? []).map((s) => (
+                  <View key={s.source} style={styles.sourceRow}>
+                    <Ionicons name={s.healthy ? "checkmark-circle" : "alert-circle"} size={16} color={s.healthy ? colors.success : colors.high} />
+                    <Small style={{ flex: 1 }}>
+                      {s.source === "FSIS" ? "USDA (meat, poultry, eggs)" : s.source === "CPSC" ? "CPSC (household products)" : "FDA (food, drugs, cosmetics)"} · {s.lastSuccessAt ? `updated ${new Date(s.lastSuccessAt).toLocaleDateString()}` : "not yet"}
+                    </Small>
+                  </View>
+                ))}
+                <Small style={{ fontSize: 11 }}>
+                  {Platform.OS} · {apiBaseUrl()} · {me.data?.id ?? ""}
+                </Small>
+                <Button title="Delete my data" variant="ghost" onPress={deleteAccount} />
+              </View>
+            </Collapsible>
+          </Card>
+        </ScrollView>
+      </Screen>
+    </SafeAreaView>
   );
 }
 
-const SOURCE_LABEL: Record<string, string> = { FDA: "FDA enforcement reports", FSIS: "USDA FSIS (meat, poultry, eggs)", CPSC: "CPSC consumer products" };
-
 const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 12 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  sourceRow: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
-  sourceName: { color: colors.text, fontWeight: "600", flex: 1 },
-  sourceStatus: { fontSize: 12 },
+  sourceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  _r: { borderRadius: radius.sm },
+  _t: { color: colors.text },
 });

@@ -48,16 +48,16 @@ export default function ConnectorsScreen() {
     <Screen>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2) }} keyboardShouldPersistTaps="handled">
         <Card>
-          <Subtitle>Add an account</Subtitle>
-          <Body muted>Pick the retailer, paste the MCP server URL from its developer settings, and the access token it issued you.</Body>
+          <Subtitle>Connect a shopping account</Subtitle>
+          <Body muted>We'll read what you've bought and watch all of it for recalls. Paste the connection link and access code from the retailer's app.</Body>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {(providers.data?.providers ?? []).map((p) => (
               <Pill key={p.id} label={p.label} active={provider === p.id} onPress={() => setProvider(p.id as ConnectorProvider)} />
             ))}
           </ScrollView>
           <Input placeholder="Display name (optional)" value={name} onChangeText={setName} />
-          <Input placeholder="https://… MCP server URL" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
-          <Input placeholder="Access token (stored encrypted)" value={token} onChangeText={setToken} autoCapitalize="none" secureTextEntry />
+          <Input placeholder="Connection link (https://…)" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
+          <Input placeholder="Access code (kept encrypted)" value={token} onChangeText={setToken} autoCapitalize="none" secureTextEntry />
           <Button title="Connect" loading={saving} disabled={!/^https:\/\//.test(url.trim())} onPress={() => void add()} />
         </Card>
 
@@ -72,7 +72,7 @@ export default function ConnectorsScreen() {
             {c.lastSyncError ? <Body style={{ color: colors.critical }}>{c.lastSyncError}</Body> : null}
             <View style={{ flexDirection: "row", gap: 8 }}>
               <Button
-                title="Import purchases"
+                title="Import my purchases"
                 style={{ flex: 1 }}
                 loading={imp.isPending && imp.variables === c.id}
                 onPress={() =>

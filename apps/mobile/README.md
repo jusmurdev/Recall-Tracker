@@ -25,8 +25,11 @@ Config:
 - Bundle ids in `app.json` (`ios.bundleIdentifier`, `android.package`).
 
 Screens (`app/`):
-- `(tabs)/index` recall feed with search + filters, `(tabs)/scan` camera (barcode + OCR),
-  `(tabs)/watchlist`, `(tabs)/alerts`, `(tabs)/settings`
+- `(tabs)/index` Home (status hero, quick actions, serious recalls near you), `(tabs)/browse`
+  feed with search + filters, `(tabs)/scan` camera (barcode + OCR), `(tabs)/alerts`,
+  `(tabs)/settings` ("You"), `(tabs)/watchlist` (hidden tab, reached from Home)
+- `src/lib/friendly.ts` turns agency text into plain language (headline, reason, severity,
+  grade copy); `src/lib/theme.ts` holds the palette
 - `recall/[id]`, `alert/[id]`, `watch/new`, `watch/restaurant` (premium), `watch/[id]`
 - `premium/index`, `premium/connectors` (MCP account linking + import)
 

@@ -1,87 +1,143 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { CATEGORY_LABEL, type RecallCategory, type RecallSeverity } from "@recall/shared";
-import { Empty, Input, Loading, Pill, RecallRow, Screen } from "@/components/ui";
-import { useRecallFeed, useStats } from "@/hooks/queries";
+import React from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { ActionTile, Body, Card, Heading, Loading, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
+import { useAlerts, useMe, useRecallFeed, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
-import { colors, spacing } from "@/lib/theme";
+import { whyAlert } from "@/lib/friendly";
+import { colors, radius, spacing } from "@/lib/theme";
 
-const CATEGORIES: Array<RecallCategory | "all"> = ["all", "food", "meat_poultry", "dietary_supplement", "veterinary", "cosmetic", "drug", "medical_device", "consumer_product"];
-const SEVERITIES: Array<RecallSeverity | "all"> = ["all", "critical", "high", "low"];
-
-export default function RecallsScreen() {
-  const [q, setQ] = useState("");
-  const [category, setCategory] = useState<RecallCategory | "all">("all");
-  const [severity, setSeverity] = useState<RecallSeverity | "all">("all");
-  const [nearMe, setNearMe] = useState(false);
+/**
+ * Home leads with the one thing people want to know: am I okay? Then the two things they
+ * came to do (check something, add something). Browsing all recalls lives on its own tab.
+ */
+export default function HomeScreen() {
+  const me = useMe();
+  const alerts = useAlerts();
+  const list = useWatchlist();
+  const updates = useRestaurantUpdates(me.data?.tier === "premium");
   const loc = useLocationState();
-  const stateFilter = nearMe ? (loc.state ?? undefined) : undefined;
-  const query = useMemo(
-    () => ({ q: q.trim() || undefined, category: category === "all" ? undefined : category, severity: severity === "all" ? undefined : severity, state: stateFilter }),
-    [q, category, severity, stateFilter],
-  );
-  const toggleNearMe = async () => {
-    if (nearMe) return setNearMe(false);
-    const p = loc.place ?? (await loc.refresh({ ask: true }));
-    if (p?.state) setNearMe(true);
-  };
-  const feed = useRecallFeed(query);
-  const stats = useStats();
-  const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
+  const feed = useRecallFeed({ state: loc.state ?? undefined, severity: "critical" });
+
+  const open = (alerts.data?.items ?? []).filter((a) => !a.resolvedAt && !a.dismissedAt);
+  const unread = open.filter((a) => !a.readAt);
+  const watching = list.data?.items.length ?? 0;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const latest = feed.data?.pages[0]?.items.slice(0, 3) ?? [];
 
   return (
-    <Screen>
-      <FlatList
-        data={items}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={{ padding: spacing(2), gap: spacing(1.5), paddingBottom: spacing(6) }}
-        refreshControl={<RefreshControl refreshing={feed.isRefetching} onRefresh={() => void feed.refetch()} tintColor={colors.accent} />}
-        onEndReached={() => feed.hasNextPage && !feed.isFetchingNextPage && void feed.fetchNextPage()}
-        onEndReachedThreshold={0.6}
-        ListHeaderComponent={
-          <View style={{ gap: spacing(1.5) }}>
-            {stats.data ? (
-              <View style={styles.statsRow}>
-                <Stat label="Last 7 days" value={stats.data.last7Days} />
-                <Stat label="Critical" value={stats.data.severityLast7Days.critical ?? 0} color={colors.critical} />
-                <Stat label="Sources" value={stats.data.sources.filter((s) => s.healthy).length + "/" + stats.data.sources.length} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
+      <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(4) }} refreshControl={<RefreshControl refreshing={alerts.isRefetching} onRefresh={() => void Promise.all([alerts.refetch(), list.refetch(), feed.refetch()])} tintColor={colors.accent} />}>
+        <View>
+          <Small>{greeting}</Small>
+          <Title>Recall Tracker</Title>
+        </View>
+
+        {alerts.isLoading ? (
+          <Loading />
+        ) : open.length ? (
+          <Card tone={open.some((a) => a.recall.severity === "critical") ? "critical" : "high"}>
+            <View style={styles.heroRow}>
+              <Ionicons name="alert-circle" size={28} color={open.some((a) => a.recall.severity === "critical") ? colors.critical : colors.high} />
+              <View style={{ flex: 1 }}>
+                <Heading>
+                  {open.length === 1 ? "1 thing needs a look" : `${open.length} things need a look`}
+                </Heading>
+                <Small>{unread.length ? `${unread.length} new since you last checked.` : "You've seen these. Tap to deal with them."}</Small>
               </View>
+            </View>
+            {open.slice(0, 2).map((a) => (
+              <RecallRow key={a.id} recall={a.recall} note={whyAlert(a)} onPress={() => router.push(`/alert/${a.id}`)} />
+            ))}
+            {open.length > 2 ? (
+              <Pressable onPress={() => router.push("/alerts")} accessibilityRole="button">
+                <Text style={styles.link}>See all {open.length} →</Text>
+              </Pressable>
             ) : null}
-            <Input placeholder="Search recalls (brand, product, allergen…)" value={q} onChangeText={setQ} autoCorrect={false} returnKeyType="search" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {CATEGORIES.map((c) => (
-                <Pill key={c} label={c === "all" ? "All" : CATEGORY_LABEL[c]} active={category === c} onPress={() => setCategory(c)} />
-              ))}
-            </ScrollView>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Pill label={nearMe && loc.state ? `Sold in ${loc.state}` : loc.busy ? "Locating…" : "Near me"} active={nearMe} onPress={() => void toggleNearMe()} />
-              {SEVERITIES.map((s) => (
-                <Pill key={s} label={s === "all" ? "Any severity" : s[0]!.toUpperCase() + s.slice(1)} active={severity === s} onPress={() => setSeverity(s)} />
-              ))}
-            </ScrollView>
-          </View>
-        }
-        ListEmptyComponent={feed.isLoading ? <Loading /> : <Empty title="No recalls match" body={feed.error ? String(feed.error) : "Try a broader search or category."} />}
-        renderItem={({ item }) => <RecallRow recall={item} onPress={() => router.push(`/recall/${item.id}`)} />}
-        ListFooterComponent={feed.isFetchingNextPage ? <Loading /> : null}
-      />
-    </Screen>
-  );
-}
+          </Card>
+        ) : (
+          <Card tone="success">
+            <View style={styles.heroRow}>
+              <Ionicons name="checkmark-circle" size={30} color={colors.success} />
+              <View style={{ flex: 1 }}>
+                <Heading>You're all clear</Heading>
+                <Small>
+                  {watching ? `Nothing you watch has been recalled. We're keeping an eye on ${watching} item${watching === 1 ? "" : "s"}.` : "Add a few things you buy and we'll watch them for you."}
+                </Small>
+              </View>
+            </View>
+          </Card>
+        )}
 
-function Stat({ label, value, color }: { label: string; value: number | string; color?: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={[styles.statValue, color ? { color } : null]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
+        {updates.data?.unread ? (
+          <Pressable onPress={() => router.push("/restaurant-updates")} accessibilityRole="button">
+            <Card tone="premium">
+              <View style={styles.heroRow}>
+                <Ionicons name="restaurant" size={22} color={colors.premium} />
+                <View style={{ flex: 1 }}>
+                  <Body style={{ fontWeight: "700" }}>{updates.data.items[0]?.title}</Body>
+                  <Small>{updates.data.unread > 1 ? `and ${updates.data.unread - 1} more restaurant update${updates.data.unread > 2 ? "s" : ""}` : "Tap for details"}</Small>
+                </View>
+              </View>
+            </Card>
+          </Pressable>
+        ) : null}
+
+        <View style={{ flexDirection: "row", gap: spacing(1.5) }}>
+          <ActionTile icon="scan" title="Check a product" subtitle="Scan a barcode or label" onPress={() => router.push("/scan")} />
+          <ActionTile icon="add-circle" title="Watch a brand" subtitle="Get told if it's recalled" onPress={() => router.push("/watch/new")} tone="soft" />
+        </View>
+
+        <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
+          <Card>
+            <View style={styles.heroRow}>
+              <View style={[styles.iconBubble, { backgroundColor: colors.accentSoft }]}>
+                <Ionicons name="eye" size={20} color={colors.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Body style={{ fontWeight: "700" }}>{watching ? `Watching ${watching} item${watching === 1 ? "" : "s"}` : "Not watching anything yet"}</Body>
+                <Small>{watching ? "Brands, barcodes, restaurants and categories" : "Start with the staples in your fridge"}</Small>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </View>
+          </Card>
+        </Pressable>
+
+        <View style={{ gap: spacing(1) }}>
+          <View style={styles.sectionRow}>
+            <Heading>Serious recalls {loc.state ? `near ${loc.state}` : "right now"}</Heading>
+            <Pressable onPress={() => router.push("/browse")} accessibilityRole="button">
+              <Text style={styles.link}>Browse all</Text>
+            </Pressable>
+          </View>
+          {latest.length ? latest.map((r) => <RecallRow key={r.id} recall={r} onPress={() => router.push(`/recall/${r.id}`)} />) : feed.isLoading ? <Loading /> : <Small>No serious recalls this week. Nice.</Small>}
+        </View>
+
+        {me.data?.tier !== "premium" ? (
+          <Pressable onPress={() => router.push("/premium")} accessibilityRole="button">
+            <Card tone="premium">
+              <View style={styles.heroRow}>
+                <Ionicons name="sparkles" size={22} color={colors.premium} />
+                <View style={{ flex: 1 }}>
+                  <Body style={{ fontWeight: "700" }}>Eat out with confidence</Body>
+                  <Small>Track restaurants' health grades and suppliers, and import what you buy.</Small>
+                </View>
+                <PremiumTag />
+              </View>
+            </Card>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  statsRow: { flexDirection: "row", gap: spacing(1) },
-  stat: { flex: 1, backgroundColor: colors.card, borderRadius: 12, padding: spacing(1.5), borderWidth: 1, borderColor: colors.border },
-  statValue: { color: colors.text, fontSize: 22, fontWeight: "800" },
-  statLabel: { color: colors.muted, fontSize: 12 },
+  heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconBubble: { width: 40, height: 40, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
+  sectionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  link: { color: colors.accent, fontWeight: "700", fontSize: 14 },
 });

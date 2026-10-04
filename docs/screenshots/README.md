@@ -1,17 +1,17 @@
 # Screenshots
 
-Captured from the Expo **web export** of the mobile app at iPhone 14 size (390×844 @2x, dark
+Captured from the Expo **web export** of the mobile app at iPhone 14 size (390×844 @2x, light
 mode) against the API loaded with recorded fixtures and the demo seed. Native-only features
 (camera, OCR, geofencing, push) show their permission/fallback states on web.
 
 | | | |
 | --- | --- | --- |
-| ![](01-recalls-feed.png) Feed | ![](01b-feed-search.png) Search | ![](02-recall-detail.png) Recall detail |
-| ![](03-scan.png) Scan | ![](04-watchlist.png) Watchlist | ![](05-watch-new.png) Watch a product |
-| ![](06-subscribe.png) Category subscription | ![](07-restaurant-detail.png) Restaurant + health grade | ![](08-restaurant-add.png) Add restaurant |
-| ![](08b-restaurant-catalog-search.png) Catalog search | ![](09-alerts.png) Alerts | ![](10-alert-detail.png) Alert detail |
-| ![](11-restaurant-updates.png) Restaurant updates | ![](12-premium.png) Premium | ![](13-connectors.png) Connected accounts |
-| ![](14-settings.png) Settings | | |
+| ![](01-home.png) Home | ![](01a-browse.png) Browse | ![](01b-browse-search.png) Search |
+| ![](02-recall-detail.png) Recall detail | ![](03-scan.png) Scan | ![](04-watchlist.png) Things you watch |
+| ![](05-watch-new.png) Add a brand | ![](06-subscribe.png) Follow a category | ![](07-restaurant-detail.png) Restaurant + health grade |
+| ![](08-restaurant-add.png) Add restaurant | ![](08b-restaurant-catalog-search.png) Catalog search | ![](09-alerts.png) Alerts |
+| ![](10-alert-detail.png) Alert detail | ![](11-restaurant-updates.png) Restaurant updates | ![](12-premium.png) Premium |
+| ![](13-connectors.png) Connected accounts | ![](14-settings.png) You | |
 
 ## Regenerate
 

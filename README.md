@@ -76,10 +76,10 @@ See [docs/PREMIUM.md](docs/PREMIUM.md).
 ## Screenshots
 
 <p>
-  <img src="docs/screenshots/01-recalls-feed.png" width="180" alt="Recall feed" />
+  <img src="docs/screenshots/01-home.png" width="180" alt="Home" />
+  <img src="docs/screenshots/02-recall-detail.png" width="180" alt="Recall detail" />
   <img src="docs/screenshots/07-restaurant-detail.png" width="180" alt="Restaurant with health grade" />
-  <img src="docs/screenshots/09-alerts.png" width="180" alt="Alerts" />
-  <img src="docs/screenshots/14-settings.png" width="180" alt="Settings" />
+  <img src="docs/screenshots/10-alert-detail.png" width="180" alt="Alert detail" />
 </p>
 
 All screens, and how to regenerate them: [docs/screenshots](docs/screenshots/README.md).
@@ -108,6 +108,16 @@ npm run dev:mobile     # Expo dev server
 
 Environment variables are documented in `apps/api/.env.example`. The whole stack also runs
 with `docker compose up` (api, worker, postgres, redis).
+
+### Design principles
+
+- **Lead with the answer.** Home opens with "You're all clear" or "3 things need a look".
+- **Plain words.** "Serious / Moderate / Minor" instead of Class I/II/III; "Salmonella
+  contamination risk" instead of the agency's sentence; "Matches the brand of your Jif".
+- **Calm by default.** Source ids, distribution lists and full descriptions sit behind
+  "Show details"; settings keep rarely-used options under "More options".
+- **One accent, colour for status.** Warm off-white background, teal for actions, red /
+  amber / blue only to say how worried to be.
 
 ### Mobile (iPhone first)
 
