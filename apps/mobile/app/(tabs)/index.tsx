@@ -8,6 +8,7 @@ import { ApiError } from "@/api/client";
 import { useAlerts, useMe, useRecallFeed, useReceipts, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { whyAlert } from "@/lib/friendly";
+import { dietHeadline } from "@/lib/diet";
 import { colors, radius, spacing } from "@/lib/theme";
 
 /**
@@ -26,6 +27,9 @@ export default function HomeScreen() {
 
   const open = (alerts.data?.items ?? []).filter((a) => !a.resolvedAt && !a.dismissedAt);
   const unread = open.filter((a) => !a.readAt);
+  // Diet matches lead: "1 recall matches your peanut allergy" says more than "1 thing needs a look".
+  const dietLead = dietHeadline(open);
+  const ordered = [...open].sort((a, b) => Number(b.reason === "diet_match") - Number(a.reason === "diet_match") || b.score - a.score);
   const watching = list.data?.items.length ?? 0;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -51,12 +55,12 @@ export default function HomeScreen() {
               <Ionicons name="alert-circle" size={28} color={open.some((a) => a.recall.severity === "critical") ? colors.critical : colors.high} />
               <View style={{ flex: 1 }}>
                 <Heading>
-                  {open.length === 1 ? "1 thing needs a look" : `${open.length} things need a look`}
+                  {dietLead ?? (open.length === 1 ? "1 thing needs a look" : `${open.length} things need a look`)}
                 </Heading>
-                <Small>{unread.length ? `${unread.length} new since you last checked.` : "You've seen these. Tap to deal with them."}</Small>
+                <Small>{dietLead && open.length > 1 ? `${open.length} open alerts in all. ` : ""}{unread.length ? `${unread.length} new since you last checked.` : "You've seen these. Tap to deal with them."}</Small>
               </View>
             </View>
-            {open.slice(0, 2).map((a) => (
+            {ordered.slice(0, 2).map((a) => (
               <RecallRow key={a.id} recall={a.recall} note={whyAlert(a)} onPress={() => router.push(`/alert/${a.id}`)} />
             ))}
             {open.length > 2 ? (

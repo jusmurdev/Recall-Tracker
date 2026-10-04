@@ -2,6 +2,7 @@
  * Plain-language helpers. Agencies write for lawyers; we write for someone holding a jar.
  */
 import type { Alert, Recall, RecallCategory, RecallSeverity, RestaurantGrade } from "@recall/shared";
+import { profilePhrase } from "@/lib/diet";
 
 export const SEVERITY: Record<RecallSeverity, { label: string; short: string; advice: string }> = {
   critical: { label: "Serious", short: "Serious", advice: "Could cause serious illness. Don't use it." },
@@ -78,7 +79,9 @@ export function plainReason(reason: string, summary = ""): string {
     if (m) {
       if (label === "Undeclared allergen") {
         const a = r.match(/undeclared\s+([a-z ]+?)(?:\s+allergen|[.,;)]|$)/);
-        return a?.[1] ? `Contains ${a[1].trim()} that isn't on the label` : label;
+        if (!a?.[1]) return label;
+        const what = a[1].trim();
+        return `${what.charAt(0).toUpperCase()}${what.slice(1)} not listed on the label`;
       }
       return label;
     }
@@ -88,9 +91,15 @@ export function plainReason(reason: string, summary = ""): string {
 }
 
 /** Friendly reason for an alert: lead with what the user is watching. */
-export function whyAlert(alert: Pick<Alert, "reason" | "watchItemLabel">): string {
+export function whyAlert(alert: Pick<Alert, "reason" | "watchItemLabel"> & Partial<Pick<Alert, "dietProfile" | "dietKind" | "explanation">>): string {
   const what = alert.watchItemLabel ? `your "${alert.watchItemLabel}"` : "something you watch";
   switch (alert.reason) {
+    case "diet_match": {
+      const phrase = profilePhrase(alert.dietProfile, alert.explanation ?? "");
+      if (alert.dietKind === "undeclared") return `Undeclared allergen · matters for your ${phrase}`;
+      if (alert.dietKind === "certification") return `Kosher-certified product · you keep kosher`;
+      return `Matters for your ${phrase}`;
+    }
     case "upc_exact":
       return `Exact barcode match for ${what}`;
     case "brand_match":

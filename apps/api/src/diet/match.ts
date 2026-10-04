@@ -93,7 +93,9 @@ export function scanText(text: string, entry: Pick<DictionaryEntry, "profile" | 
       // "contains no milk", "free from gluten": not a hit, unless the sentence is literally about an
       // undeclared allergen.
       if (!undeclared && isNegated(before.slice(-48))) continue;
-      hits.push({ profile: entry.profile, term, phrase: text.slice(start, end), index: start, kind: undeclared ? "undeclared" : ambiguous ? "ambiguous" : "mention", field });
+      // An ambiguous word stays ambiguous even next to "undeclared": "undeclared almonds (tree
+      // nuts)" is not a peanut hit just because "nuts" is on the peanut maybe-list.
+      hits.push({ profile: entry.profile, term, phrase: text.slice(start, end), index: start, kind: ambiguous ? "ambiguous" : undeclared ? "undeclared" : "mention", field });
     }
   };
   for (const t of entry.terms) consider(t, false);

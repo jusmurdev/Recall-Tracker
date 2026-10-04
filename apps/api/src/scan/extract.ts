@@ -27,8 +27,12 @@ export interface ExtractedProduct {
 }
 
 export function extractFromOcr(ocrText: string | undefined, context?: string, upc?: string): ExtractedProduct {
+  // Ingredient and allergen statements describe what is inside, not which product this is;
+  // matching on them would drag in every recall that lists the same ingredient.
+  const INGREDIENT_LINE = /^\s*(ingredients?|contains|may contain|allergen|allergens|allergy information|made (?:in|on)|manufactured|produced|distributed|packed)\b/i;
   const lines = (ocrText ?? "")
     .split(/\r?\n/)
+    .filter((l) => !INGREDIENT_LINE.test(l))
     .map((l) => l.replace(/[^\p{L}\p{N}'&.\- ]/gu, " ").replace(/\s+/g, " ").trim())
     .filter((l) => l.length >= 2);
 

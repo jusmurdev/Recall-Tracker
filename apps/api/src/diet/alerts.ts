@@ -15,6 +15,32 @@ type DietUser = Pick<User, "id" | "dietProfiles" | "otherAllergens">;
 const BACKFILL_DAYS = 45;
 const BACKFILL_LIMIT = 25;
 
+type DietAlertRow = ReturnType<typeof alertData> & { pushedAt?: Date };
+
+/**
+ * Create diet alerts; where the user already has an alert for the recall (a category
+ * subscription, a brand match), replace it when the diet hit says more. "Undeclared peanuts, you
+ * listed peanut allergy" beats "in a category you follow". Returns rows created or upgraded.
+ */
+async function writeDietAlerts(rows: DietAlertRow[]): Promise<{ created: number; upgraded: number; touched: Array<{ userId: string; recallId: string }> }> {
+  if (!rows.length) return { created: 0, upgraded: 0, touched: [] };
+  const res = await prisma.alert.createMany({ data: rows, skipDuplicates: true });
+  let upgraded = 0;
+  if (res.count < rows.length) {
+    const existing = await prisma.alert.findMany({
+      where: { OR: rows.map((r) => ({ userId: r.userId, recallId: r.recallId })), reason: { not: "diet_match" } },
+      select: { id: true, userId: true, recallId: true, score: true },
+    });
+    for (const e of existing) {
+      const row = rows.find((r) => r.userId === e.userId && r.recallId === e.recallId);
+      if (!row || row.score <= e.score) continue;
+      await prisma.alert.update({ where: { id: e.id }, data: { reason: row.reason, score: row.score, explanation: row.explanation, dietProfile: row.dietProfile, dietKind: row.dietKind, matchedPhrase: row.matchedPhrase, watchItemId: null } });
+      upgraded += 1;
+    }
+  }
+  return { created: res.count, upgraded, touched: rows.map((r) => ({ userId: r.userId, recallId: r.recallId })) };
+}
+
 function alertData(user: DietUser, recall: Pick<Recall, "id">, hit: RecallDietHit) {
   return {
     userId: user.id,
@@ -52,9 +78,9 @@ export async function matchRecallsForDiet(recalls: Recall[], opts: { notify?: bo
       if (best) data.push(alertData(user, recall, best));
     }
     if (!data.length) continue;
-    const res = await prisma.alert.createMany({ data, skipDuplicates: true });
-    created += res.count;
-    if (res.count) {
+    const res = await writeDietAlerts(data);
+    created += res.created + res.upgraded;
+    if (res.created || res.upgraded) {
       const fresh = await prisma.alert.findMany({ where: { recallId: recall.id, reason: "diet_match", userId: { in: data.map((d) => d.userId) }, pushedAt: null, score: { gte: 0.5 } }, select: { id: true } });
       toPush.push(...fresh.map((a) => a.id));
     }
@@ -78,8 +104,8 @@ export async function backfillDietAlerts(user: DietUser): Promise<number> {
     if (data.length >= BACKFILL_LIMIT) break;
   }
   if (!data.length) return 0;
-  const res = await prisma.alert.createMany({ data, skipDuplicates: true });
-  return res.count;
+  const res = await writeDietAlerts(data);
+  return res.created + res.upgraded;
 }
 
 /** Recent recalls that match the user's profile, for the "For my diet" browse filter. */

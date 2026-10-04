@@ -4,6 +4,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ReceiptItem, ReceiptScanResponse } from "@recall/shared";
 import { Card, PremiumTag, RecallRow, Small, Subtitle } from "@/components/ui";
+import { DietHeadsUp } from "@/components/DietHeadsUp";
 import { plainReason } from "@/lib/friendly";
 import { colors, radius } from "@/lib/theme";
 
@@ -50,6 +51,7 @@ export function ReceiptResults({ result }: { result: ReceiptScanResponse }) {
                   {plainReason(top.recall.reason, top.recall.summary)} · tap for what to do
                 </Text>
               ) : null}
+              {item.dietFlags?.length ? <DietHeadsUp hits={item.dietFlags} compact /> : null}
             </View>
             {top && item.status !== "clear" ? <Ionicons name="chevron-forward" size={18} color={colors.border} /> : null}
           </Pressable>

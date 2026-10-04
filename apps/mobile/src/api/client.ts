@@ -6,6 +6,7 @@ import type {
   CreateConnectorRequest,
   CreateWatchItemRequest,
   CreateWatchItemResponse,
+  DietPreferences,
   DismissAlertRequest,
   ImportPurchasesResponse,
   Inspection,
@@ -17,6 +18,7 @@ import type {
   ReceiptSummary,
   Recall,
   RecallListQuery,
+  RecallWithDietHit,
   NearbyRestaurant,
   RegisterDeviceRequest,
   ResolveAlertRequest,
@@ -124,6 +126,8 @@ export interface Me {
   homeState: string | null;
   lastKnownState: string | null;
   preferences: NotificationPreferences;
+  /** Dietary profile selections (free tier). */
+  diet: DietPreferences;
   premium: { tier: "free" | "premium"; features: { connectors: boolean; restaurants: boolean; aiScan: boolean }; expiresAt: string | null };
 }
 
@@ -137,12 +141,13 @@ export interface Stats {
 export const api = {
   me: () => request<Me>("/v1/me"),
   registerDevice: (body: RegisterDeviceRequest) => request<{ id: string }>("/v1/devices", { method: "POST", body: JSON.stringify(body) }),
-  updatePreferences: (body: UpdatePreferencesRequest) => request<NotificationPreferences>("/v1/me/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+  updatePreferences: (body: UpdatePreferencesRequest) => request<NotificationPreferences & { diet: DietPreferences; dietAlertsAdded: number }>("/v1/me/preferences", { method: "PATCH", body: JSON.stringify(body) }),
   deleteAccount: () => request<void>("/v1/me", { method: "DELETE" }),
   updateLocation: (body: UpdateLocationRequest) =>
     request<{ homeState: string | null; lastKnownState: string | null; lastLocationAt: string | null }>("/v1/me/location", { method: "PUT", body: JSON.stringify(body) }),
 
-  recalls: (q: Partial<RecallListQuery>) => request<{ items: Recall[]; nextCursor: string | null }>(`/v1/recalls?${qs(q)}`, { auth: false }),
+  // "For my diet" needs the signed-in user; everything else is the public feed.
+  recalls: (q: Partial<RecallListQuery>) => request<{ items: RecallWithDietHit[]; nextCursor: string | null; diet?: { configured: boolean } }>(`/v1/recalls?${qs({ ...q, diet: q.diet ? "1" : undefined })}`, { auth: !!q.diet }),
   recall: (id: string) => request<Recall>(`/v1/recalls/${id}`, { auth: false }),
   stats: () => request<Stats>("/v1/recalls/stats", { auth: false }),
 

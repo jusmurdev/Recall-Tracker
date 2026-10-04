@@ -13,6 +13,7 @@ import { useMe, useScanMatch, useScanReceipt } from "@/hooks/queries";
 import { barcodesInPhoto, recognizeText } from "@/lib/ocr";
 import { colors, radius, spacing } from "@/lib/theme";
 import { ReceiptResults } from "@/components/ReceiptResults";
+import { DietHeadsUp } from "@/components/DietHeadsUp";
 
 type Target = "product" | "receipt";
 type Mode = "camera" | "manual" | "product-result" | "receipt-result";
@@ -158,6 +159,7 @@ export default function ScanScreen() {
           {productResult.matches.map((m) => (
             <RecallRow key={m.recall.id} recall={m.recall} onPress={() => router.push(`/recall/${m.recall.id}`)} />
           ))}
+          {productResult.diet?.length ? <DietHeadsUp hits={productResult.diet} /> : null}
           {!hit && photo && premium ? <Button title="Not the right product? Look closer with AI" variant="secondary" icon="sparkles" loading={!!busy} onPress={() => void identifyWithAi()} /> : null}
           <Button title="Scan another" icon="scan" onPress={reset} />
         </ScrollView>

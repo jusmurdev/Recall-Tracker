@@ -62,6 +62,7 @@ export default function RootLayout() {
               <Stack.Screen name="restaurant/[id]" options={{ title: "" }} />
               <Stack.Screen name="watch/[id]" options={{ title: "" }} />
               <Stack.Screen name="premium/index" options={{ title: "Premium" }} />
+              <Stack.Screen name="diet-info" options={{ title: "" }} />
               <Stack.Screen name="premium/connectors" options={{ title: "Connected accounts" }} />
             </Stack>
           </Boot>

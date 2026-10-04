@@ -5,7 +5,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { Button, Empty, Input, Loading, OfflineNotice, Pill, RecallRow, Small, Title } from "@/components/ui";
 import { ApiError } from "@/api/client";
-import { useRecallFeed } from "@/hooks/queries";
+import { useMe, useRecallFeed } from "@/hooks/queries";
+import { hasDiet } from "@/lib/diet";
 import { useLocationState } from "@/hooks/useLocationState";
 import { CATEGORY_EMOJI, CATEGORY_FRIENDLY } from "@/lib/friendly";
 import { colors, spacing } from "@/lib/theme";
@@ -23,10 +24,13 @@ export default function BrowseScreen() {
   const [category, setCategory] = useState<RecallCategory | "all">("all");
   const [severity, setSeverity] = useState<RecallSeverity | "all">("all");
   const [nearMe, setNearMe] = useState(false);
+  const [forDiet, setForDiet] = useState(false);
+  const me = useMe();
+  const dietConfigured = hasDiet(me.data?.diet);
   const loc = useLocationState();
   const query = useMemo(
-    () => ({ q: q.trim() || undefined, category: category === "all" ? undefined : category, severity: severity === "all" ? undefined : severity, state: nearMe ? (loc.state ?? undefined) : undefined }),
-    [q, category, severity, nearMe, loc.state],
+    () => ({ q: q.trim() || undefined, category: category === "all" ? undefined : category, severity: severity === "all" ? undefined : severity, state: nearMe ? (loc.state ?? undefined) : undefined, diet: forDiet || undefined }),
+    [q, category, severity, nearMe, loc.state, forDiet],
   );
   const feed = useRecallFeed(query);
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
@@ -58,6 +62,7 @@ export default function BrowseScreen() {
             {offline && items.length ? <OfflineNotice stale onRetry={() => void feed.refetch()} /> : null}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.pillRow}>
               <Pill label={nearMe && loc.state ? `Sold in ${loc.state}` : loc.busy ? "Locating…" : "Near me"} icon="location-outline" active={nearMe} onPress={() => void toggleNearMe()} />
+              <Pill label="For my diet" icon="nutrition-outline" active={forDiet} onPress={() => (dietConfigured ? setForDiet((v) => !v) : router.push("/settings"))} />
               {SEVERITIES.map((s) => (
                 <Pill key={s.v} label={s.label} active={severity === s.v} onPress={() => setSeverity(s.v)} />
               ))}
@@ -71,6 +76,12 @@ export default function BrowseScreen() {
         }
         ListEmptyComponent={
           feed.isLoading ? <Loading />
+          : forDiet ? (
+            <View style={{ gap: spacing(1.5) }}>
+              <Empty icon="nutrition-outline" title="Nothing matches your diet right now" body="No current recall mentions the allergens or ingredients in your profile. We keep checking as new recalls come in." />
+              <Button title="Edit my diet profile" variant="secondary" icon="person-circle-outline" onPress={() => router.push("/settings")} />
+            </View>
+          )
           : offline ? (
             <View style={{ gap: spacing(1.5) }}>
               <Empty icon="cloud-offline-outline" title="Can't reach the server" body="Check your connection and try again. Recalls you've already seen stay available offline." />
@@ -79,7 +90,7 @@ export default function BrowseScreen() {
           )
           : <Empty icon="search-outline" title="Nothing here" body="Try a different word or widen the filters." />
         }
-        renderItem={({ item }) => <RecallRow recall={item} onPress={() => router.push(`/recall/${item.id}`)} />}
+        renderItem={({ item }) => <RecallRow recall={item} note={forDiet ? item.dietHit?.explanation : undefined} onPress={() => router.push(`/recall/${item.id}`)} />}
         ListFooterComponent={feed.isFetchingNextPage ? <Loading /> : null}
       />
     </SafeAreaView>

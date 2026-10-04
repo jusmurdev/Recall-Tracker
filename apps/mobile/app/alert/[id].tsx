@@ -6,6 +6,7 @@ import { Body, Button, Card, Heading, Loading, Screen, SeverityChip, Small, Subt
 import { useAlert, useAlertAction, useMarkRead } from "@/hooks/queries";
 import { useBottomPad } from "@/hooks/useBottomPad";
 import { CATEGORY_EMOJI, SEVERITY, headline, plainReason, whyAlert } from "@/lib/friendly";
+import { DIET_KIND_LABEL, excerptAround, highlightSegments, profileLabel } from "@/lib/diet";
 import { colors, spacing } from "@/lib/theme";
 
 const ACTION_LABEL: Record<string, string> = {
@@ -56,6 +57,32 @@ export default function AlertDetail() {
           <Heading>{plainReason(r.reason, r.summary)}</Heading>
           <Body>{SEVERITY[r.severity].advice}</Body>
         </Card>
+
+        {a.reason === "diet_match" ? (
+          <Card tone={a.dietKind === "undeclared" ? "critical" : "accent"}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Ionicons name="nutrition-outline" size={22} color={a.dietKind === "undeclared" ? colors.critical : colors.accent} />
+              <View style={{ flex: 1 }}>
+                <Subtitle>{profileLabel(a.dietProfile, null)}</Subtitle>
+                <Small>{a.dietKind ? DIET_KIND_LABEL[a.dietKind] : "Matched"}{a.matchedPhrase ? ` · "${a.matchedPhrase}"` : ""}</Small>
+              </View>
+            </View>
+            <Body>{a.explanation}</Body>
+            {a.matchedPhrase ? (
+              <View style={styles.codeBox}>
+                <Text style={styles.code}>
+                  {highlightSegments(excerptAround(fieldWithPhrase(r, a.matchedPhrase), a.matchedPhrase), a.matchedPhrase).map((seg, i) => (
+                    <Text key={i} style={seg.hit ? styles.highlight : undefined}>
+                      {seg.text}
+                    </Text>
+                  ))}
+                </Text>
+              </View>
+            ) : null}
+            <Small>Matches come from the words in the notice and can miss things. {a.dietProfile === "halal" || a.dietProfile === "kosher" ? "This is not a certification judgment." : "Check the package before eating."}</Small>
+            <Button title="About diet alerts" variant="ghost" icon="help-circle-outline" onPress={() => router.push("/diet-info")} />
+          </Card>
+        ) : null}
 
         {a.resolvedAt ? (
           <Card tone="success">
@@ -116,8 +143,16 @@ export default function AlertDetail() {
   );
 }
 
+/** The recall field that contains the matched phrase, for the highlighted excerpt. */
+function fieldWithPhrase(r: { reason: string; summary: string; title: string; productDescription: string; codeInfo: string | null }, phrase: string): string {
+  const p = phrase.toLowerCase();
+  for (const text of [r.reason, r.summary, r.title, r.productDescription, r.codeInfo ?? ""]) if (text.toLowerCase().includes(p)) return text;
+  return r.reason || r.summary;
+}
+
 const styles = StyleSheet.create({
   why: { flexDirection: "row", alignItems: "center", gap: 6 },
   codeBox: { backgroundColor: colors.cardAlt, borderRadius: 12, padding: 12 },
   code: { color: colors.text, fontSize: 15, lineHeight: 22 },
+  highlight: { backgroundColor: colors.highSoft, color: colors.text, fontWeight: "800" },
 });

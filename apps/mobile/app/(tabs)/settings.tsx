@@ -6,7 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { api } from "@/api/client";
-import { Body, Button, Card, Collapsible, Pill, PremiumTag, Screen, Small, Subtitle, SwitchRow, Title } from "@/components/ui";
+import { Body, Button, Card, Collapsible, Input, Pill, PremiumTag, Screen, Small, Subtitle, SwitchRow, Title } from "@/components/ui";
+import { ALLERGY_PROFILES, DIET_TOGGLES, EMPTY_DIET, addOtherAllergen, removeOtherAllergen, toggleProfile } from "@/lib/diet";
 import { deviceTimezone } from "@/hooks/useTimezoneSync";
 import { usePushStatus } from "@/lib/pushStatus";
 import { useMe, useStats, useUpdatePreferences, useWatchlist } from "@/hooks/queries";
@@ -37,6 +38,24 @@ export default function SettingsScreen() {
   const update = useUpdatePreferences();
   const setPref = (patch: Parameters<typeof update.mutate>[0]) => update.mutate(patch);
   const push = usePushStatus();
+  const diet = me.data?.diet ?? EMPTY_DIET;
+  const [otherAllergen, setOtherAllergen] = useState("");
+  const [allergenError, setAllergenError] = useState<string | null>(null);
+  const [dietNote, setDietNote] = useState<string | null>(null);
+  const saveDiet = (next: typeof diet) =>
+    update.mutate(next, {
+      onSuccess: (res) => {
+        if (res.dietAlertsAdded > 0) setDietNote(`${res.dietAlertsAdded} recall${res.dietAlertsAdded === 1 ? "" : "s"} from the last few weeks match. See Alerts.`);
+      },
+    });
+  const addAllergen = () => {
+    const r = addOtherAllergen(diet, otherAllergen);
+    setAllergenError(r.error);
+    if (!r.error) {
+      setOtherAllergen("");
+      if (r.next !== diet) saveDiet(r.next);
+    }
+  };
   const tz = prefs?.timezone ?? deviceTimezone();
   const [geofences, setGeofences] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
@@ -105,6 +124,42 @@ export default function SettingsScreen() {
               {loc.state ? <Button title="Set as home" variant="secondary" onPress={() => void loc.refresh({ ask: true, setHome: true })} /> : null}
             </View>
             {loc.permission === "denied" ? <Button title="Allow location in Settings" variant="ghost" onPress={() => void Linking.openSettings()} /> : null}
+          </Card>
+
+          <Card>
+            <Subtitle>Diet and allergies</Subtitle>
+            <Small>Get told when a recall mentions something you avoid, even if you never added the product. Scans get a heads-up too.</Small>
+            {me.data ? (
+              <>
+                <Small>Allergies</Small>
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {ALLERGY_PROFILES.map((a) => (
+                    <Pill key={a.profile} label={`${a.emoji} ${a.label}`} active={diet.dietProfiles.includes(a.profile)} onPress={() => saveDiet(toggleProfile(diet, a.profile))} />
+                  ))}
+                  {diet.otherAllergens.map((w) => (
+                    <Pill key={w} label={`✕ ${w}`} active onPress={() => saveDiet(removeOtherAllergen(diet, w))} />
+                  ))}
+                </View>
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                  <Input placeholder="Another allergen, e.g. mustard" value={otherAllergen} onChangeText={setOtherAllergen} onSubmitEditing={addAllergen} returnKeyType="done" autoCapitalize="none" style={{ flex: 1 }} />
+                  <Button title="Add" variant="secondary" disabled={otherAllergen.trim().length < 2} onPress={addAllergen} />
+                </View>
+                {allergenError ? <Small style={{ color: colors.critical }}>{allergenError}</Small> : null}
+                {DIET_TOGGLES.map((t) => (
+                  <SwitchRow key={t.profile} label={t.label} description={t.description} value={diet.dietProfiles.includes(t.profile)} onValueChange={() => saveDiet(toggleProfile(diet, t.profile))} />
+                ))}
+                {dietNote ? (
+                  <View style={styles.notice}>
+                    <Ionicons name="information-circle-outline" size={18} color={colors.high} />
+                    <Small style={{ flex: 1, color: colors.text }}>{dietNote}</Small>
+                  </View>
+                ) : null}
+                <Small>Matches come from the words in recall notices and labels. They can miss things and never say a product is halal or kosher. Always check the package.</Small>
+                <Button title="About diet alerts" variant="ghost" icon="help-circle-outline" onPress={() => router.push("/diet-info")} />
+              </>
+            ) : (
+              <Small>Loading…</Small>
+            )}
           </Card>
 
           <Card>
