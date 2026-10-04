@@ -434,6 +434,79 @@ describe("HTTP API (integration)", () => {
     expect(summary.json().resolved).toBe(1);
   });
 
+  it("stores a dietary profile, validates it, and alerts on matching recalls (diet_match)", async () => {
+    // Fresh user so earlier tests' alerts don't interfere.
+    const signin = await app.inject({ method: "POST", url: "/v1/auth/anonymous", payload: { installId: "install-diet-user", platform: "android", timezone: "America/Chicago" } });
+    const dietAuth = { authorization: `Bearer ${signin.json().token}` };
+    expect((await app.inject({ method: "GET", url: "/v1/me", headers: dietAuth })).json().preferences.timezone).toBe("America/Chicago");
+
+    // Validation: unknown profile, junk allergen text.
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["vegan"] } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { otherAllergens: ["<script>"] } })).statusCode).toBe(400);
+
+    // Turning on a milk allergy backfills the undeclared-milk recall already in the database.
+    const saved = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["allergy_milk", "kosher"], otherAllergens: ["Mustard"] } });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().diet).toEqual({ dietProfiles: ["allergy_milk", "kosher"], otherAllergens: ["mustard"] });
+    expect(saved.json().dietAlertsAdded).toBeGreaterThanOrEqual(1);
+    const me = await app.inject({ method: "GET", url: "/v1/me", headers: dietAuth });
+    expect(me.json().diet.dietProfiles).toEqual(["allergy_milk", "kosher"]);
+
+    const alerts = await app.inject({ method: "GET", url: "/v1/alerts", headers: dietAuth });
+    const milk = alerts.json().items.find((a: { reason: string; dietProfile: string }) => a.reason === "diet_match" && a.dietProfile === "allergy_milk");
+    expect(milk).toBeTruthy();
+    expect(milk.recall.sourceId).toBe("F-1460-2026");
+    expect(milk.dietKind).toBe("undeclared");
+    expect(milk.matchedPhrase.toLowerCase()).toMatch(/milk|whey/);
+    expect(milk.explanation).toMatch(/^Undeclared (milk|whey)/);
+    expect(milk.explanation).toContain("You listed milk allergy");
+    expect(milk.watchItemId).toBeNull(); // no watchlist needed
+    expect(milk.score).toBeGreaterThanOrEqual(0.9);
+
+    // The Listeria recalls do not produce diet alerts for this user.
+    expect(alerts.json().items.filter((a: { reason: string }) => a.reason === "diet_match").every((a: { recall: { reason: string } }) => !/listeria/i.test(a.recall.reason))).toBe(true);
+
+    // Browse: "For my diet" narrows the feed and explains each hit; without a profile it says so.
+    const diet = await app.inject({ method: "GET", url: "/v1/recalls?diet=1", headers: dietAuth });
+    expect(diet.json().items.map((r: { sourceId: string }) => r.sourceId)).toContain("F-1460-2026");
+    expect(diet.json().items.every((r: { dietHit?: { explanation: string } }) => !!r.dietHit?.explanation)).toBe(true);
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?diet=1" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?diet=1", headers: auth() })).json().diet).toEqual({ configured: false });
+
+    // Scan: a label mentioning casein gets a heads-up even though nothing is recalled.
+    const scan = await app.inject({ method: "POST", url: "/v1/scan/match", headers: dietAuth, payload: { ocrText: "ZAPPO CRUNCH BAR\nINGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR" } });
+    expect(scan.json().status).toBe("clear");
+    const byProfile = Object.fromEntries(scan.json().diet.map((h: { profile: string; kind: string; phrase: string }) => [h.profile, h]));
+    expect(byProfile.allergy_milk).toMatchObject({ kind: "mention", phrase: "CASEIN" });
+    expect(byProfile.kosher.phrase.toLowerCase()).toContain("pork");
+    expect(byProfile.allergy_other).toMatchObject({ label: "Mustard allergy" });
+    // Receipts carry the same flags per line.
+    const receipt = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: dietAuth, payload: { ocrText: "TARGET\nGG WHOLE MILK 1GAL 3.49\nBNNA ORG 1.29\nTOTAL 4.78" } });
+    const milkLine = receipt.json().items.find((i: { product: string }) => i.product.includes("milk"));
+    expect(milkLine.dietFlags.map((f: { profile: string }) => f.profile)).toContain("allergy_milk");
+    expect(receipt.json().items.find((i: { product: string }) => i.product.includes("banana")).dietFlags).toEqual([]);
+
+    // A new recall ingested later alerts by diet alone. Simulate with a direct insert + match.
+    const { matchRecalls } = await import("../matching/engine.js");
+    const fresh = await prisma.recall.create({
+      data: {
+        source: "FDA", sourceId: "DIET-TEST-1", title: "Acme Snacks: Honey Mustard Pretzels", summary: "Undeclared mustard.", productDescription: "Honey Mustard Pretzels 8 oz", reason: "Undeclared mustard.",
+        category: "food", severity: "low", status: "ongoing", company: "Acme Snacks", brands: [], upcs: [], distributionStates: ["US"], publishedAt: new Date(), contentHash: "diet-test-1", raw: {},
+      },
+    });
+    const created = await matchRecalls([fresh], { notify: false });
+    expect(created).toBeGreaterThanOrEqual(1);
+    const mustard = await prisma.alert.findFirst({ where: { recallId: fresh.id, userId: signin.json().user.id } });
+    expect(mustard).toMatchObject({ reason: "diet_match", dietProfile: "allergy_other", dietKind: "undeclared" });
+    expect(mustard!.explanation).toContain("You listed mustard allergy");
+
+    // Clearing the profile keeps the alerts (they are history) but stops new ones.
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: [], otherAllergens: [] } })).json().diet).toEqual({ dietProfiles: [], otherAllergens: [] });
+    // Account deletion removes the profile with everything else.
+    expect((await app.inject({ method: "DELETE", url: "/v1/me", headers: dietAuth })).statusCode).toBe(204);
+    expect(await prisma.user.findUnique({ where: { installId: "install-diet-user" } })).toBeNull();
+  });
+
   it("deletes the account and everything attached to it", async () => {
     const other = await app.inject({ method: "POST", url: "/v1/auth/anonymous", payload: { installId: "delete-me-install", platform: "ios" } });
     const h = { authorization: `Bearer ${other.json().token}` };

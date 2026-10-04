@@ -5,6 +5,7 @@ import { logger } from "../lib/logger.js";
 import { enqueuePushForAlerts } from "../jobs/queues.js";
 import { isGenericTerm, termWeight } from "../scan/terms.js";
 import { normalizeGtin } from "../scan/gtin.js";
+import { matchRecallsForDiet } from "../diet/alerts.js";
 
 /** Alerts below this score are stored (visible in the inbox) but not pushed. */
 export const PUSH_THRESHOLD = 0.5;
@@ -224,6 +225,8 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
   if (notify && toPush.length) {
     await enqueuePushForAlerts(toPush).catch((err) => logger.error({ err }, "failed to enqueue push jobs"));
   }
+  // Dietary profiles: alerts that depend on what the user avoids, not on their watchlist.
+  created += await matchRecallsForDiet(recalls, { notify });
   return created;
 }
 

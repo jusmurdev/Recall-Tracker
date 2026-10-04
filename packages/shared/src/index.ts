@@ -113,6 +113,9 @@ export type RecallListQuery = z.infer<typeof RecallListQuery>;
 export const Paginated = <T extends z.ZodTypeAny>(item: T) =>
   z.object({ items: z.array(item), nextCursor: z.string().nullable() });
 
+/** A recall in the "For my diet" feed carries the hit that put it there. */
+export type RecallWithDietHit = Recall & { dietHit?: DietHit };
+
 // ---------------------------------------------------------------------------
 // Auth / devices
 // ---------------------------------------------------------------------------
@@ -223,6 +226,8 @@ export const MatchReason = z.enum([
   "scan_text_match",
   "restaurant_supplier",
   "category_subscription",
+  /** The recall text mentions something in the user's dietary profile. */
+  "diet_match",
 ]);
 export type MatchReason = z.infer<typeof MatchReason>;
 
@@ -235,6 +240,10 @@ export const Alert = z.object({
   /** 0..1 confidence the recall concerns something the user cares about. */
   score: z.number().min(0).max(1),
   explanation: z.string(),
+  /** diet_match only: which profile fired, how, and the phrase in the recall text. */
+  dietProfile: z.string().nullable().optional(),
+  dietKind: z.enum(["undeclared", "mention", "certification", "cross_contact", "ambiguous"]).nullable().optional(),
+  matchedPhrase: z.string().nullable().optional(),
   createdAt: z.string().datetime(),
   readAt: z.string().datetime().nullable(),
   pushedAt: z.string().datetime().nullable(),
@@ -268,10 +277,75 @@ export const NotificationPreferences = z.object({
   digestHour: z.number().int().min(0).max(23),
 });
 export type NotificationPreferences = z.infer<typeof NotificationPreferences>;
-export const UpdatePreferencesRequest = NotificationPreferences.partial().extend({
-  /** Home state can be set here too (validated against US_STATES); null clears it. */
-  homeState: StateCode.nullable().optional(),
+// ---------------------------------------------------------------------------
+// Dietary profile (free tier, deterministic). Sensitive: selections only, never sent to AI.
+// ---------------------------------------------------------------------------
+
+export const DietProfile = z.enum([
+  // The nine major US allergens
+  "allergy_milk",
+  "allergy_egg",
+  "allergy_fish",
+  "allergy_shellfish",
+  "allergy_tree_nut",
+  "allergy_peanut",
+  "allergy_wheat",
+  "allergy_soy",
+  "allergy_sesame",
+  // Diets
+  "gluten_free",
+  /** Halal diet: flags haram ingredients (pork and derivatives, alcohol, non-halal gelatin, carmine…). */
+  "halal",
+  /** Kosher: flags pork/shellfish, meat-and-dairy cross-contact, and recalls of kosher-certified products. */
+  "kosher",
+]);
+export type DietProfile = z.infer<typeof DietProfile>;
+
+export const DIET_PROFILE_LABEL: Record<DietProfile, string> = {
+  allergy_milk: "Milk allergy",
+  allergy_egg: "Egg allergy",
+  allergy_fish: "Fish allergy",
+  allergy_shellfish: "Shellfish allergy",
+  allergy_tree_nut: "Tree nut allergy",
+  allergy_peanut: "Peanut allergy",
+  allergy_wheat: "Wheat allergy",
+  allergy_soy: "Soy allergy",
+  allergy_sesame: "Sesame allergy",
+  gluten_free: "Gluten-free",
+  halal: "Halal diet",
+  kosher: "Kosher",
+};
+
+export const DietPreferences = z.object({
+  dietProfiles: z.array(DietProfile).max(12),
+  /** Free-text allergens ("mustard", "lupin"), 2–40 letters each. */
+  otherAllergens: z.array(z.string().trim().min(2).max(40).regex(/^[\p{L}' -]+$/u, "Letters only")).max(10),
 });
+export type DietPreferences = z.infer<typeof DietPreferences>;
+
+/** What a diet heads-up or alert says about a recall or label. */
+export const DietHit = z.object({
+  profile: z.union([DietProfile, z.literal("allergy_other")]),
+  /** Human label: "Peanut allergy", "Halal diet", or the user's own allergen word. */
+  label: z.string(),
+  /** How the text mentioned it. "undeclared" is the serious one. */
+  kind: z.enum(["undeclared", "mention", "certification", "cross_contact", "ambiguous"]),
+  /** Dictionary term that matched ("casein") and the phrase as it appears in the text. */
+  term: z.string(),
+  phrase: z.string(),
+  /** Which recall field (reason, summary, productDescription, title, codeInfo) or "label" for scans. */
+  field: z.string(),
+  /** Plain-English, honest wording: "Mentions pork-derived gelatin. You follow a halal diet." */
+  explanation: z.string(),
+});
+export type DietHit = z.infer<typeof DietHit>;
+
+export const UpdatePreferencesRequest = NotificationPreferences.partial()
+  .extend({
+    /** Home state can be set here too (validated against US_STATES); null clears it. */
+    homeState: StateCode.nullable().optional(),
+  })
+  .merge(DietPreferences.partial());
 export type UpdatePreferencesRequest = z.input<typeof UpdatePreferencesRequest>;
 
 // ---------------------------------------------------------------------------
@@ -303,6 +377,8 @@ export const ScanMatchResponse = z.object({
   /** Same verdict scale as receipt lines, so a product reads the same on every screen. */
   status: z.enum(["recalled", "possible", "clear"]),
   matches: z.array(ScanMatch),
+  /** "Heads up for your diet": label words that matter for the user's profile, recall or not. */
+  diet: z.array(DietHit).default([]),
   watchItem: WatchItem.nullable(),
 });
 export type ScanMatchResponse = z.infer<typeof ScanMatchResponse>;
@@ -332,6 +408,8 @@ export const ReceiptItem = z.object({
   status: ReceiptItemStatus,
   matches: z.array(ScanMatch),
   watchItemId: z.string().nullable(),
+  /** Diet flags for this line ("mentions milk"), independent of recall status. */
+  dietFlags: z.array(DietHit).default([]),
 });
 export type ReceiptItem = z.infer<typeof ReceiptItem>;
 

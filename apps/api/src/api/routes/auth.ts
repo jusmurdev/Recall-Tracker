@@ -4,6 +4,7 @@ import { prisma } from "../../db/client.js";
 import { randomToken, sha256 } from "../../lib/crypto.js";
 import { HttpProblem, requireUser, isPremium } from "../plugins/auth.js";
 import type { User } from "@prisma/client";
+import { backfillDietAlerts } from "../../diet/alerts.js";
 
 function prefsOf(u: User) {
   return {
@@ -15,6 +16,11 @@ function prefsOf(u: User) {
     digestMode: u.digestMode,
     digestHour: u.digestHour,
   };
+}
+
+/** Diet selections, returned only to the owner; never logged or sent to third parties. */
+function dietOf(u: User) {
+  return { dietProfiles: u.dietProfiles, otherAllergens: u.otherAllergens };
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -43,6 +49,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       homeState: user.homeState,
       lastKnownState: user.lastKnownState,
       preferences: prefsOf(user),
+      diet: dietOf(user),
       premium: {
         tier: premium ? "premium" : "free",
         features: { connectors: premium, restaurants: premium, aiScan: premium },
@@ -61,9 +68,16 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const merged = { s: body.quietHoursStart === undefined ? user.quietHoursStart : body.quietHoursStart, e: body.quietHoursEnd === undefined ? user.quietHoursEnd : body.quietHoursEnd };
       if ((merged.s == null) !== (merged.e == null)) throw new HttpProblem(400, "validation", "Set both quietHoursStart and quietHoursEnd, or neither.");
     }
-    const { homeState, ...prefs } = body;
-    const updated = await prisma.user.update({ where: { id: user.id }, data: { ...prefs, ...(homeState !== undefined ? { homeState } : {}) } });
-    return prefsOf(updated);
+    const { homeState, dietProfiles, otherAllergens, ...prefs } = body;
+    const diet = {
+      ...(dietProfiles !== undefined ? { dietProfiles: [...new Set(dietProfiles)] } : {}),
+      ...(otherAllergens !== undefined ? { otherAllergens: [...new Set(otherAllergens.map((a) => a.trim().toLowerCase()))] } : {}),
+    };
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { ...prefs, ...diet, ...(homeState !== undefined ? { homeState } : {}) } });
+    // New selection: surface recent recalls that already match, so the change is visible at once.
+    const dietChanged = JSON.stringify(dietOf(user)) !== JSON.stringify(dietOf(updated));
+    const backfilled = dietChanged ? await backfillDietAlerts(updated) : 0;
+    return { ...prefsOf(updated), diet: dietOf(updated), dietAlertsAdded: backfilled };
   });
 
   /**

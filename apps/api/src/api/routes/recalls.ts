@@ -2,8 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { RecallListQuery } from "@recall/shared";
 import { prisma } from "../../db/client.js";
+import { recallIdsForDiet } from "../../diet/alerts.js";
+import { hasDietSelection } from "../../diet/match.js";
 import { escapeLike } from "../../matching/engine.js";
-import { HttpProblem } from "../plugins/auth.js";
+import { HttpProblem, requireUser } from "../plugins/auth.js";
 import { serializeRecall } from "../serialize.js";
 
 /** Cursor = base64("<publishedAt ms>|<id>") for stable keyset pagination. */
@@ -36,6 +38,16 @@ export async function recallRoutes(app: FastifyInstance): Promise<void> {
       where.AND = [{ OR: [{ publishedAt: { lt: c.publishedAt } }, { publishedAt: c.publishedAt, id: { lt: c.id } }] }];
     }
 
+    // "For my diet": only recalls matching the signed-in user's dietary profile.
+    let dietHits: Awaited<ReturnType<typeof recallIdsForDiet>> | null = null;
+    if (q.diet) {
+      const user = requireUser(req);
+      if (!hasDietSelection(user)) return { items: [], nextCursor: null, diet: { configured: false } };
+      dietHits = await recallIdsForDiet(user);
+      if (!dietHits.size) return { items: [], nextCursor: null, diet: { configured: true } };
+      where.id = { in: [...dietHits.keys()] };
+    }
+
     let ids: string[] | null = null;
     if (q.q) {
       // Full-text search over the generated tsvector, ranked, then filtered through Prisma.
@@ -47,6 +59,7 @@ export async function recallRoutes(app: FastifyInstance): Promise<void> {
         LIMIT 500
       `);
       ids = rows.map((r) => r.id);
+      if (dietHits) ids = ids.filter((id) => dietHits!.has(id));
       if (!ids.length) return { items: [], nextCursor: null };
       where.id = { in: ids };
     }
@@ -59,8 +72,13 @@ export async function recallRoutes(app: FastifyInstance): Promise<void> {
     const page = rows.slice(0, q.limit);
     const last = page[page.length - 1];
     return {
-      items: page.map(serializeRecall),
+      items: page.map((r) => {
+        const base = serializeRecall(r);
+        const hit = dietHits?.get(r.id);
+        return hit ? { ...base, dietHit: { profile: hit.profile, label: hit.label, kind: hit.kind, term: hit.term, phrase: hit.phrase, field: hit.field, explanation: hit.explanation } } : base;
+      }),
       nextCursor: rows.length > q.limit && last ? encodeCursor(last.publishedAt, last.id) : null,
+      ...(dietHits ? { diet: { configured: true } } : {}),
     };
   });
 

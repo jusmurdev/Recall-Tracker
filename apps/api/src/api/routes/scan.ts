@@ -12,6 +12,8 @@ import { prisma } from "../../db/client.js";
 import { recordAlertsForItem } from "../../matching/engine.js";
 import { identifyProduct } from "../../premium/scanIdentify.js";
 import { checkProduct } from "../../scan/check.js";
+import { refineAmbiguousHits } from "../../diet/aiClassify.js";
+import { dietHitsForLabel, hasDietSelection } from "../../diet/match.js";
 import { extractFromOcr } from "../../scan/extract.js";
 import { HttpProblem, requirePremium, requireUser } from "../plugins/auth.js";
 import { serializeRecall, serializeWatchItem } from "../serialize.js";
@@ -30,6 +32,9 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     const label = extracted.brand ?? terms[0] ?? body.upc ?? "scan";
     const check = await checkProduct(user, { label, terms, upc: extracted.upc });
     const { matches } = check;
+    // "Heads up for your diet": label words that matter to this user, whether or not anything is recalled.
+    let diet = hasDietSelection(user) ? dietHitsForLabel([body.ocrText ?? "", body.context ?? ""].join("\n"), user) : [];
+    if (diet.some((h) => h.kind === "ambiguous") && isPremium(user) && body.ocrText) diet = await refineAmbiguousHits(user.id, body.ocrText, diet);
 
     let watchItem = null;
     if (body.watch) {
@@ -50,6 +55,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
       extracted,
       status: check.status,
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
+      diet,
       watchItem: watchItem ? serializeWatchItem(watchItem) : null,
     };
   });
@@ -69,10 +75,12 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     const terms = [...new Set([identified.brand, identified.productName, ...identified.searchTerms].filter((t): t is string => !!t).map((t) => t.toLowerCase()))].slice(0, 8);
     const check = await checkProduct(user, { label: [identified.brand, identified.productName].filter(Boolean).join(" ") || "scan", terms, upc: identified.upc });
     const { matches } = check;
+    const diet = hasDietSelection(user) ? dietHitsForLabel([body.ocrText ?? "", identified.productName ?? "", body.context ?? ""].join("\n"), user) : [];
     return {
       identified,
       extracted: { brand: identified.brand, terms, upc: identified.upc },
       status: check.status,
+      diet,
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
     };
   });
@@ -136,7 +144,8 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
           await recordAlertsForItem({ ...wi, homeState: user.homeState, lastKnownState: user.lastKnownState }, matches);
         }
       }
-      items.push({ raw: line.raw, product: line.product, brand: line.brand, terms: line.terms, status, watchItemId, matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })) });
+      const dietFlags = hasDietSelection(user) ? dietHitsForLabel(`${line.product} ${line.raw}`, user, "receipt") : [];
+      items.push({ raw: line.raw, product: line.product, brand: line.brand, terms: line.terms, status, watchItemId, matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })), dietFlags });
     }
 
     const saved = await prisma.receiptScan.create({
@@ -172,7 +181,8 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     for (const line of stored) {
       const { matches, status } = await checkProduct(user, { label: line.product, terms: line.terms }, { limit: 5 });
       if (status !== "clear") flagged += 1;
-      items.push({ raw: line.raw, product: line.product, brand: line.brand, terms: line.terms, status, watchItemId: line.watchItemId ?? null, matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })) });
+      const dietFlags = hasDietSelection(user) ? dietHitsForLabel(`${line.product} ${line.raw}`, user, "receipt") : [];
+      items.push({ raw: line.raw, product: line.product, brand: line.brand, terms: line.terms, status, watchItemId: line.watchItemId ?? null, matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })), dietFlags });
     }
     if (flagged !== r.flaggedCount) await prisma.receiptScan.update({ where: { id }, data: { flaggedCount: flagged } });
     return { id: r.id, store: r.store, purchasedAt: r.purchasedAt?.toISOString().slice(0, 10) ?? null, items, flagged, decodedByAi: r.decodedByAi, watched: r.watched, skippedLines: 0 };

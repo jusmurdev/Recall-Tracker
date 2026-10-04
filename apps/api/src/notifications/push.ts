@@ -42,8 +42,11 @@ export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Exp
   let skipped = 0;
   const delayed = new Map<number, string[]>();
   for (const alert of alerts) {
-    // Respect the user's notification preferences.
-    const decision = decidePush(alert.user, alert.recall);
+    // Respect the user's notification preferences. An undeclared allergen for someone with that
+    // allergy is always at least "high" and never waits for the digest.
+    const urgentDiet = alert.reason === "diet_match" && alert.dietKind === "undeclared" && alert.dietProfile !== "halal" && alert.dietProfile !== "kosher";
+    const severity = urgentDiet && (alert.recall.severity === "low" || alert.recall.severity === "unknown") ? "high" : alert.recall.severity;
+    const decision = decidePush(alert.user, { ...alert.recall, severity }, { bypassDigest: urgentDiet });
     if (!decision.send) {
       if (decision.reason === "quiet_hours") {
         const bucket = Math.ceil(decision.delayMs / 60_000) * 60_000;
@@ -66,12 +69,12 @@ export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Exp
       }
       messages.push({
         to: device.expoPushToken,
-        sound: alert.recall.severity === "critical" ? "default" : undefined,
-        priority: alert.recall.severity === "critical" ? "high" : "default",
-        title: `${SEVERITY_PREFIX[alert.recall.severity] ?? "Recall"}${alert.watchItem ? ` · ${alert.watchItem.label}` : ""}`,
+        sound: severity === "critical" || urgentDiet ? "default" : undefined,
+        priority: severity === "critical" || urgentDiet ? "high" : "default",
+        title: alert.reason === "diet_match" ? `${SEVERITY_PREFIX[severity] ?? "Recall"} · ${dietTitle(alert.dietProfile, alert.explanation)}` : `${SEVERITY_PREFIX[severity] ?? "Recall"}${alert.watchItem ? ` · ${alert.watchItem.label}` : ""}`,
         body: truncate(`${alert.recall.title}. ${alert.explanation}`, 170),
         data: { alertId: alert.id, recallId: alert.recallId, url: `recalltracker://alerts/${alert.id}` },
-        channelId: alert.recall.severity === "critical" ? "critical-recalls" : "recalls",
+        channelId: severity === "critical" ? "critical-recalls" : "recalls",
         categoryId: "recall",
         alertId: alert.id,
         deviceId: device.id,
@@ -192,4 +195,18 @@ export async function sendPushForNotices(noticeIds: string[], expoClient: Pick<E
     }
   }
   return { sent, skipped, invalidated };
+}
+
+/** "Peanut allergy", "Halal diet": the profile name, without exposing anything else. */
+function dietTitle(profile: string | null, explanation: string): string {
+  if (!profile) return "For your diet";
+  const labels: Record<string, string> = {
+    allergy_milk: "Milk allergy", allergy_egg: "Egg allergy", allergy_fish: "Fish allergy", allergy_shellfish: "Shellfish allergy", allergy_tree_nut: "Tree nut allergy",
+    allergy_peanut: "Peanut allergy", allergy_wheat: "Wheat allergy", allergy_soy: "Soy allergy", allergy_sesame: "Sesame allergy", gluten_free: "Gluten-free", halal: "Halal diet", kosher: "Kosher",
+  };
+  if (profile === "allergy_other") {
+    const m = explanation.match(/You listed ([a-z' -]+) allergy/i);
+    return m ? `${m[1]!.charAt(0).toUpperCase()}${m[1]!.slice(1)} allergy` : "Your allergy";
+  }
+  return labels[profile] ?? "For your diet";
 }

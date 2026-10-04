@@ -28,14 +28,17 @@ describe("notification preferences", () => {
     const critical = { severity: "critical" as const, category: "food" as const };
     expect(decidePush(base, low)).toEqual({ send: true });
     expect(decidePush({ ...base, pushMinSeverity: "high" }, low)).toEqual({ send: false, reason: "below_min_severity" });
+    // Undeclared allergens for an allergic user skip the digest.
+    expect(decidePush({ ...base, digestMode: true }, { severity: "high", category: "food" })).toEqual({ send: false, reason: "digest" });
+    expect(decidePush({ ...base, digestMode: true }, { severity: "high", category: "food" }, { bypassDigest: true })).toEqual({ send: true });
     expect(decidePush({ ...base, pushMinSeverity: "high" }, critical)).toEqual({ send: true });
     expect(decidePush({ ...base, mutedCategories: ["food"] }, critical)).toEqual({ send: false, reason: "muted_category" });
     expect(decidePush({ ...base, digestMode: true }, low)).toEqual({ send: false, reason: "digest" });
     expect(decidePush({ ...base, digestMode: true }, critical)).toEqual({ send: true }); // critical never waits
     const quiet = { ...base, quietHoursStart: 22, quietHoursEnd: 7 };
-    const d = decidePush(quiet, low, at("2026-10-04T03:30:00Z"));
+    const d = decidePush(quiet, low, {}, at("2026-10-04T03:30:00Z"));
     expect(d).toMatchObject({ send: false, reason: "quiet_hours" });
     expect((d as { delayMs: number }).delayMs).toBe(8.5 * 3600_000);
-    expect(decidePush(quiet, critical, at("2026-10-04T03:30:00Z"))).toEqual({ send: true });
+    expect(decidePush(quiet, critical, {}, at("2026-10-04T03:30:00Z"))).toEqual({ send: true });
   });
 });

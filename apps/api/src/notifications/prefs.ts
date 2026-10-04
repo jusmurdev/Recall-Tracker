@@ -35,11 +35,16 @@ export function msUntilQuietEnd(user: Pick<User, "timezone" | "quietHoursStart" 
  * Should this alert be pushed right now? Order matters: muted/severity filters are final,
  * digest batching is next, quiet hours only delay.
  */
-export function decidePush(user: Pick<User, "pushMinSeverity" | "mutedCategories" | "quietHoursStart" | "quietHoursEnd" | "timezone" | "digestMode">, recall: Pick<Recall, "severity" | "category">, now = new Date()): PushDecision {
+export function decidePush(
+  user: Pick<User, "pushMinSeverity" | "mutedCategories" | "quietHoursStart" | "quietHoursEnd" | "timezone" | "digestMode">,
+  recall: Pick<Recall, "severity" | "category">,
+  opts: { bypassDigest?: boolean } = {},
+  now = new Date(),
+): PushDecision {
   if (RANK[recall.severity] < RANK[user.pushMinSeverity]) return { send: false, reason: "below_min_severity" };
   if (user.mutedCategories.includes(recall.category)) return { send: false, reason: "muted_category" };
   // Critical recalls always go out immediately; everything else can wait for the digest.
-  if (user.digestMode && recall.severity !== "critical") return { send: false, reason: "digest" };
+  if (user.digestMode && recall.severity !== "critical" && !opts.bypassDigest) return { send: false, reason: "digest" };
   if (inQuietHours(user, now) && recall.severity !== "critical") return { send: false, reason: "quiet_hours", delayMs: msUntilQuietEnd(user, now) };
   return { send: true };
 }
