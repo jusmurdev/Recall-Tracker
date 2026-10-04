@@ -3,10 +3,10 @@
  * receipt photo), return a clean product name, brand and category per line. The free parser
  * runs first; this only improves what it could not expand.
  */
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod/v4";
-import { assertQuota, claude, model, parseJsonOutput, recordUsage, textOf } from "./claude.js";
+import { runStructured } from "../ai/index.js";
+import { assertQuota, providerFromClient } from "./claude.js";
 
 export const DecodedReceipt = z.object({
   store: z.string().nullable(),
@@ -29,22 +29,20 @@ export async function decodeReceipt(
   userId: string,
   ocrText: string,
   image?: { base64: string; mediaType: "image/jpeg" | "image/png" | "image/webp" },
-  client: Anthropic = claude(),
+  client?: Anthropic,
 ): Promise<DecodedReceipt> {
   await assertQuota(userId);
-  const content: Anthropic.ContentBlockParam[] = [];
-  if (image) content.push({ type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } });
-  content.push({
-    type: "text",
-    text: `This is a store receipt. List every purchased product line with a plain-English product name and brand. Expand cashier abbreviations (PNT BTR = peanut butter, CHKN BRST = chicken breast, KRGR = Kroger store brand). Skip totals, taxes, payments, coupons and fees. Keep the original line in "raw".\n\nOCR text:\n${ocrText.slice(0, 6000)}`,
-  });
-  const response = await client.messages.create({
-    model: model(),
-    max_tokens: 6000,
-    output_config: { format: zodOutputFormat(DecodedReceipt), effort: "low" },
-    messages: [{ role: "user", content }],
-  });
-  await recordUsage(userId, "receipt_decode", response.usage);
-  if (response.stop_reason === "refusal") throw new Error("The AI declined to read this receipt.");
-  return parseJsonOutput(textOf(response.content), (v) => DecodedReceipt.parse(v));
+  const { data } = await runStructured(
+    userId,
+    {
+      feature: "receipt_decode",
+      prompt: `This is a store receipt. List every purchased product line with a plain-English product name and brand. Expand cashier abbreviations (PNT BTR = peanut butter, CHKN BRST = chicken breast, KRGR = Kroger store brand). Skip totals, taxes, payments, coupons and fees. Keep the original line in "raw".\n\nOCR text:\n${ocrText.slice(0, 6000)}`,
+      schema: DecodedReceipt,
+      images: image ? [image] : undefined,
+      maxTokens: 6000,
+      effort: "low",
+    },
+    { provider: providerFromClient(client) },
+  );
+  return data;
 }

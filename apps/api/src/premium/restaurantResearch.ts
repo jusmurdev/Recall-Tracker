@@ -10,15 +10,15 @@
  * Uses Claude with the server-side web search tool (runs on Anthropic's infrastructure, so
  * we do no crawling ourselves).
  */
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod/v4";
 import type { RestaurantProfile, WatchItem } from "@prisma/client";
 import { env } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
 import { findRecallsForItem, recordAlertsForItem, type RecallMatch } from "../matching/engine.js";
-import { assertQuota, claude, model, parseJsonOutput, recordUsage, textOf } from "./claude.js";
+import { runStructured } from "../ai/index.js";
+import { assertQuota, providerFromClient } from "./claude.js";
 import { syncGrade } from "../inspections/sync.js";
 import { enqueueGradeSync } from "../jobs/queues.js";
 
@@ -137,7 +137,7 @@ export async function researchProfile(profileId: string, requestingUserId: strin
   if (requestingUserId) await assertQuota(requestingUserId);
   await prisma.restaurantProfile.update({ where: { id: profileId }, data: { researchStatus: "researching", researchError: null } });
   try {
-    const research = await runResearch(profile, requestingUserId, client ?? claude());
+    const research = await runResearch(profile, requestingUserId, client);
     const supplierTerms = extractSupplierTerms(research);
     profile = await prisma.restaurantProfile.update({
       where: { id: profileId },
@@ -182,31 +182,16 @@ async function applyInspectionFromResearch(profile: RestaurantProfile, research:
   });
 }
 
-async function runResearch(profile: RestaurantProfile, userId: string | null, client: Anthropic): Promise<Research> {
+async function runResearch(profile: RestaurantProfile, userId: string | null, client?: Anthropic): Promise<Research> {
   const where = [profile.city, profile.state].filter(Boolean).join(", ");
   const prompt = `Restaurant: ${profile.name}${where ? ` (${where})` : ""}${profile.website ? `\nWebsite: ${profile.website}` : ""}`;
-  const tools: Anthropic.ToolUnion[] = [
-    {
-      type: "web_search_20260209",
-      name: "web_search",
-      max_uses: 8,
-      user_location: { type: "approximate", country: "US", ...(profile.city ? { city: profile.city } : {}), ...(profile.state ? { region: profile.state } : {}) },
-    },
-  ];
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
-  let response = await client.messages.create({ model: model(), max_tokens: 16000, system: SYSTEM, tools, output_config: { format: zodOutputFormat(Research) }, messages });
-  await recordUsage(userId, "restaurant_research", response.usage);
-
-  // Long server-tool turns can pause; resume by echoing the assistant turn back.
-  let resumes = 0;
-  while (response.stop_reason === "pause_turn" && resumes < 3) {
-    resumes += 1;
-    messages.push({ role: "assistant", content: response.content });
-    response = await client.messages.create({ model: model(), max_tokens: 16000, system: SYSTEM, tools, output_config: { format: zodOutputFormat(Research) }, messages });
-    await recordUsage(userId, "restaurant_research", response.usage);
-  }
-  if (response.stop_reason === "refusal") throw new Error("The AI declined to research this restaurant.");
-  return parseJsonOutput(textOf(response.content), (v) => Research.parse(v));
+  // Needs web search: Claude, OpenAI or Gemini (grounded) can all do it.
+  const { data } = await runStructured(
+    userId,
+    { feature: "restaurant_research", system: SYSTEM, prompt, schema: Research, webSearch: { maxUses: 8, city: profile.city, region: profile.state } },
+    { provider: providerFromClient(client) },
+  );
+  return data;
 }
 
 /** Confirmed/likely supplier names, lower-cased, minus words true of every kitchen. */

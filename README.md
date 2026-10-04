@@ -36,8 +36,9 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
 - Browse and search every recall (full-text, by category, severity, state).
 - Watch products by brand/keyword or barcode. Instant check against the last 6 months of
   recalls; push notification when a new matching recall arrives.
-- Scan a product: barcode via the camera, or snap the label and on-device OCR (ML Kit) reads
-  it. One tap, instant verdict. Only text leaves the phone.
+- Scan a product: barcode via the camera, or snap the label and on-device OCR reads it (Apple
+  Vision on iPhone using the Neural Engine, ML Kit on Android). One tap, instant verdict.
+  Only text leaves the phone.
 - Scan a receipt: snap it, every line is decoded from cashier shorthand ("KRGR CRMY PNT BTR
   16Z" → Kroger creamy peanut butter), checked against recalls, and can be watched in one
   tap. Receipts are saved and re-checked against new recalls whenever reopened.
@@ -64,8 +65,11 @@ shared database through the API. See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md
   per person and is refreshed only when stale.
 - **AI label identification.** When OCR fails (curved bottles, glare), the photo is identified
   by Claude vision and matched.
-- **AI receipt decoding.** Claude reads the receipt photo and expands lines the dictionary
-  could not, so even cryptic store abbreviations resolve to real products.
+- **AI receipt decoding.** The receipt photo is read and lines the dictionary could not
+  expand are decoded, so even cryptic store abbreviations resolve to real products.
+- **Bring your own model.** Premium AI runs on Claude, OpenAI, Google Gemini, or any
+  OpenAI-compatible endpoint (Ollama, Groq, Together…), chosen per feature by capability with
+  automatic fallback. See [docs/PREMIUM.md](docs/PREMIUM.md#ai-providers).
 - **Health grades.** Official inspection grades and violation history from health-department
   open data (NYC and Chicago adapters; AI research elsewhere), refreshed weekly and shared.
   Trackers are notified when a grade drops.
@@ -139,8 +143,9 @@ eas build --profile device --platform ios   # development build on a real iPhone
 eas build --profile production --platform ios && eas submit -p ios
 ```
 
-Barcode scanning works in Expo Go, but OCR (ML Kit), geofencing and push tokens need a
-development build. Before shipping, replace the generated `assets/*.png` with real artwork,
+Barcode scanning works in Expo Go, but OCR, geofencing and push tokens need a development
+build. OCR is a local Expo module in `apps/mobile/modules/vision-ocr` (Apple Vision on iOS,
+ML Kit on Android) that returns positioned lines so receipts are rebuilt into rows on-device. Before shipping, replace the generated `assets/*.png` with real artwork,
 set `extra.eas.projectId`, `updates.url` and the `submit.production.ios` fields.
 
 Set the API URL with `EXPO_PUBLIC_API_URL=https://your-api` or `extra.apiBaseUrl` in

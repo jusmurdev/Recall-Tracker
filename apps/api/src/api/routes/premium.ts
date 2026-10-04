@@ -7,6 +7,7 @@ import { encryptSecret } from "../../lib/crypto.js";
 import { enqueueResearch } from "../../jobs/queues.js";
 import { importPurchases } from "../../premium/purchaseImport.js";
 import { PremiumUnavailableError, QuotaExceededError } from "../../premium/claude.js";
+import { AiProviderError, AiRefusalError, listProviders } from "../../ai/index.js";
 import { canRefresh, isFresh, restaurantKey } from "../../premium/restaurantResearch.js";
 import { findRecallsForItem } from "../../matching/engine.js";
 import { Prisma } from "@prisma/client";
@@ -292,11 +293,17 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(202).send({ queued });
   });
 
+  /** Which AI providers this server has configured (no secrets). */
+  app.get("/v1/premium/ai", async (req) => {
+    requirePremium(req);
+    return { providers: listProviders() };
+  });
+
   app.get("/v1/premium/usage", async (req) => {
     const user = requirePremium(req);
     const since = new Date(Date.now() - 24 * 3600_000);
-    const rows = await prisma.aiUsage.groupBy({ by: ["feature"], where: { userId: user.id, createdAt: { gte: since } }, _count: true, _sum: { inputTokens: true, outputTokens: true } });
-    return { last24h: rows.map((r) => ({ feature: r.feature, requests: r._count, inputTokens: r._sum.inputTokens ?? 0, outputTokens: r._sum.outputTokens ?? 0 })) };
+    const rows = await prisma.aiUsage.groupBy({ by: ["feature", "provider"], where: { userId: user.id, createdAt: { gte: since } }, _count: true, _sum: { inputTokens: true, outputTokens: true } });
+    return { last24h: rows.map((r) => ({ feature: r.feature, provider: r.provider, requests: r._count, inputTokens: r._sum.inputTokens ?? 0, outputTokens: r._sum.outputTokens ?? 0 })) };
   });
 
   /**
@@ -334,6 +341,8 @@ export async function premiumRoutes(app: FastifyInstance): Promise<void> {
 function translate(err: unknown): Error {
   if (err instanceof PremiumUnavailableError) return new HttpProblem(503, "ai_unavailable", err.message);
   if (err instanceof QuotaExceededError) return new HttpProblem(429, "quota_exceeded", err.message);
+  if (err instanceof AiRefusalError) return new HttpProblem(422, "ai_refused", err.message);
+  if (err instanceof AiProviderError) return new HttpProblem(502, "ai_error", err.message);
   if (err instanceof HttpProblem) return err;
   return new HttpProblem(502, "ai_error", err instanceof Error ? err.message : "AI request failed");
 }

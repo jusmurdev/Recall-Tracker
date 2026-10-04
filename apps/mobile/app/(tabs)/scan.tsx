@@ -10,7 +10,7 @@ import type { ReceiptScanResponse, ScanMatchResponse } from "@recall/shared";
 import { api, ApiError } from "@/api/client";
 import { Body, Button, Card, Empty, Input, PremiumTag, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
 import { useMe, useScanMatch, useScanReceipt } from "@/hooks/queries";
-import { recognizeText } from "@/lib/ocr";
+import { barcodesInPhoto, recognizeText } from "@/lib/ocr";
 import { colors, radius, spacing } from "@/lib/theme";
 import { ReceiptResults } from "@/components/ReceiptResults";
 
@@ -99,16 +99,18 @@ export default function ScanScreen() {
       if (!shot) return;
       const small = await ImageManipulator.manipulateAsync(shot.uri, [{ resize: { width: target === "receipt" ? 1600 : 1280 } }], { compress: 0.75, format: ImageManipulator.SaveFormat.JPEG, base64: true });
       setPhoto({ uri: small.uri, base64: small.base64 });
-      const ocr = (await recognizeText(small.uri)) ?? "";
-      setText(ocr);
+      // OCR runs on the phone (Apple Vision / ML Kit). For products we also look for a barcode
+      // in the still, which beats text matching when it's in frame.
+      const [ocr, codes] = await Promise.all([recognizeText(small.uri, target === "receipt" ? "receipt" : "label"), target === "product" ? barcodesInPhoto(small.uri) : Promise.resolve([])]);
+      setText(ocr.text);
       if (target === "receipt") {
-        if (ocr.trim().length > 10) await checkReceipt({ ocrText: ocr, ...(premium && small.base64 ? { imageBase64: small.base64 } : {}) });
+        if (ocr.text.length > 10) await checkReceipt({ ocrText: ocr.text, ...(premium && small.base64 && ocr.engine === "none" ? { imageBase64: small.base64 } : {}) });
         else if (premium && small.base64) await checkReceipt({ imageBase64: small.base64 });
         else {
           setError("Couldn't read the receipt. Try better light, or type a few lines below.");
           setMode("manual");
         }
-      } else if (ocr.trim().length > 2) await checkProduct({ ocrText: ocr });
+      } else if (codes[0] || ocr.text.length > 2) await checkProduct({ ...(codes[0] ? { upc: codes[0] } : {}), ...(ocr.text.length > 2 ? { ocrText: ocr.text } : {}) });
       else {
         setError("Couldn't read the label. Try again closer, or type the name below.");
         setMode("manual");

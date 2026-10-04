@@ -8,9 +8,31 @@ Gating: `User.tier = premium` (with optional `premiumExpiresAt`). The store SDK 
 tier. Premium routes return HTTP 402 `premium_required` otherwise. A per-user daily AI request
 cap (`AI_DAILY_REQUEST_LIMIT`) and token accounting (`AiUsage`) keep costs predictable.
 
-All AI calls use the Anthropic SDK (`@anthropic-ai/sdk`) with `claude-opus-5-5` by default
-(`AI_MODEL`), structured outputs via `zodOutputFormat`, and refusal handling
-(`stop_reason === "refusal"` surfaces as a clear error, never as a silent empty result).
+## AI providers
+
+Premium features go through a provider-agnostic layer (`apps/api/src/ai`). Each feature is
+a *structured request*: a prompt, a zod schema for the answer, and optionally images, web
+search, or a remote MCP server. Providers declare what they can do and the registry picks
+the first configured one that can serve the request, failing over on provider errors.
+
+| Provider | Env | Structured | Vision | Web search | MCP |
+| --- | --- | --- | --- | --- | --- |
+| Claude (Anthropic SDK) | `ANTHROPIC_API_KEY`, `AI_MODEL` | ✓ | ✓ | ✓ (server tool) | ✓ (connector) |
+| OpenAI (Responses API) | `OPENAI_API_KEY`, `OPENAI_MODEL` | ✓ strict JSON schema | ✓ | ✓ (hosted) | ✓ (remote MCP tool) |
+| Google Gemini | `GEMINI_API_KEY`, `GEMINI_MODEL` | ✓ responseSchema | ✓ | ✓ (Search grounding, two-step) | – |
+| OpenAI-compatible (Ollama, LM Studio, Groq, Together, vLLM…) | `AI_COMPAT_BASE_URL`, `AI_COMPAT_MODEL`, `AI_COMPAT_API_KEY`, `AI_COMPAT_VISION` | ✓ json_schema → json_object fallback | optional | – | – |
+
+`AI_PROVIDER` sets the default and `AI_PROVIDER_FALLBACKS` the order of alternatives. So a
+server configured `AI_PROVIDER=gemini`, `AI_PROVIDER_FALLBACKS=openai` runs photo
+identification and receipt decoding on Gemini, restaurant research on Gemini (grounded), and
+purchase import on OpenAI (Gemini has no MCP connector). A self-hosted Ollama model can take
+the cheap text-only work with the others as fallbacks. Usage is recorded per feature and
+provider (`AiUsage.provider`); `GET /v1/premium/ai` lists what is configured.
+
+Schemas are written once in zod and converted per dialect (`ai/schema.ts`): OpenAI strict
+mode (all properties required, optionals made nullable), Gemini's OpenAPI subset
+(`nullable` instead of `anyOf` with null). Refusals (`AiRefusalError`) are never retried on
+another provider; transport/HTTP errors (`AiProviderError`) are.
 
 ## 1. Connected accounts (MCP) → watchlist import
 

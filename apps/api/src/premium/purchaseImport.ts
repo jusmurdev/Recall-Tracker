@@ -5,15 +5,15 @@
  * Claude talks to the MCP server directly via the Messages API MCP connector; our server
  * never has to understand each retailer's API. The output is constrained to a JSON schema.
  */
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod/v4";
 import type { Connector, WatchItem } from "@prisma/client";
 import { prisma } from "../db/client.js";
 import { decryptSecret } from "../lib/crypto.js";
 import { logger } from "../lib/logger.js";
 import { findRecallsForItem, recordAlertsForItem } from "../matching/engine.js";
-import { assertQuota, claude, model, parseJsonOutput, recordUsage, textOf } from "./claude.js";
+import { runStructured } from "../ai/index.js";
+import { assertQuota, providerFromClient } from "./claude.js";
 
 export const PurchasedItem = z.object({
   name: z.string().describe("Product name as the retailer lists it"),
@@ -41,25 +41,22 @@ export interface ImportOutcome {
   summary: string;
 }
 
-export async function importPurchases(connector: Connector, userId: string, client: Anthropic = claude()): Promise<ImportOutcome> {
+export async function importPurchases(connector: Connector, userId: string, client?: Anthropic): Promise<ImportOutcome> {
   await assertQuota(userId);
   const token = connector.tokenCiphertext ? decryptSecret(connector.tokenCiphertext) : undefined;
-
-  const response = await client.beta.messages.create({
-    model: model(),
-    max_tokens: 16000,
-    betas: ["mcp-client-2025-11-20"],
-    system: SYSTEM,
-    mcp_servers: [{ type: "url", url: connector.mcpUrl, name: connector.provider, ...(token ? { authorization_token: token } : {}) }],
-    tools: [{ type: "mcp_toolset", mcp_server_name: connector.provider }],
-    output_config: { format: zodOutputFormat(PurchaseImport) },
-    messages: [{ role: "user", content: `Import my ${connector.displayName} purchases from the last 6 months.` }],
-  });
-  await recordUsage(userId, "purchase_import", response.usage);
-  if (response.stop_reason === "refusal") throw new Error("The AI declined to process this account's data.");
-
-  const parsed = parseJsonOutput(textOf(response.content), (v) => PurchaseImport.parse(v));
-  return materialize(parsed, connector, userId);
+  // Needs an MCP-capable provider (Claude or OpenAI); the registry picks one.
+  const { data } = await runStructured(
+    userId,
+    {
+      feature: "purchase_import",
+      system: SYSTEM,
+      prompt: `Import my ${connector.displayName} purchases from the last 6 months.`,
+      schema: PurchaseImport,
+      mcp: { name: connector.provider, url: connector.mcpUrl, token },
+    },
+    { provider: providerFromClient(client) },
+  );
+  return materialize(data, connector, userId);
 }
 
 /** Create watch items from an import result, skipping items the user already watches. */

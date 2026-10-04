@@ -1,0 +1,7 @@
+{
+  "name": "vision-ocr",
+  "version": "1.0.0",
+  "private": true,
+  "description": "On-device OCR and barcode detection: Apple Vision on iOS, ML Kit on Android.",
+  "main": "index.ts"
+}

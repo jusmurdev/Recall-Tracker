@@ -2,10 +2,10 @@
  * PREMIUM — identify a product from a photo when on-device OCR is weak (curved bottles,
  * glare, handwriting). Returns brand/product terms the matching engine can use.
  */
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod/v4";
-import { assertQuota, claude, model, parseJsonOutput, recordUsage, textOf } from "./claude.js";
+import { runStructured } from "../ai/index.js";
+import { assertQuota, providerFromClient } from "./claude.js";
 
 export const Identified = z.object({
   brand: z.string().nullable(),
@@ -24,27 +24,20 @@ export async function identifyProduct(
   image: { base64: string; mediaType: "image/jpeg" | "image/png" | "image/webp" },
   ocrText?: string,
   context?: string,
-  client: Anthropic = claude(),
+  client?: Anthropic,
 ): Promise<Identified> {
   await assertQuota(userId);
-  const response = await client.messages.create({
-    model: model(),
-    max_tokens: 4000,
-    output_config: { format: zodOutputFormat(Identified), effort: "low" },
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: image.mediaType, data: image.base64 } },
-          {
-            type: "text",
-            text: `Identify this consumer product for a recall lookup. Read the label carefully; prefer what is printed over guesses.${ocrText ? `\n\nOn-device OCR text (may be noisy):\n${ocrText.slice(0, 3000)}` : ""}${context ? `\n\nUser note: ${context}` : ""}`,
-          },
-        ],
-      },
-    ],
-  });
-  await recordUsage(userId, "scan_identify", response.usage);
-  if (response.stop_reason === "refusal") throw new Error("The AI declined to analyse this image.");
-  return parseJsonOutput(textOf(response.content), (v) => Identified.parse(v));
+  const { data } = await runStructured(
+    userId,
+    {
+      feature: "scan_identify",
+      prompt: `Identify this consumer product for a recall lookup. Read the label carefully; prefer what is printed over guesses.${ocrText ? `\n\nOn-device OCR text (may be noisy):\n${ocrText.slice(0, 3000)}` : ""}${context ? `\n\nUser note: ${context}` : ""}`,
+      schema: Identified,
+      images: [image],
+      maxTokens: 4000,
+      effort: "low",
+    },
+    { provider: providerFromClient(client) },
+  );
+  return data;
 }

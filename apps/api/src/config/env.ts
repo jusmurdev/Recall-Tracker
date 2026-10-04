@@ -27,8 +27,27 @@ const Env = z.object({
 
   EXPO_ACCESS_TOKEN: z.string().optional(),
 
+  /** Default provider for premium AI features; others in AI_PROVIDER_FALLBACKS are tried when needed. */
+  AI_PROVIDER: z.enum(["anthropic", "openai", "gemini", "openai-compatible"]).default("anthropic"),
+  AI_PROVIDER_FALLBACKS: z
+    .string()
+    .default("")
+    .transform((v) => v.split(",").map((s) => s.trim()).filter((s): s is "anthropic" | "openai" | "gemini" | "openai-compatible" => ["anthropic", "openai", "gemini", "openai-compatible"].includes(s))),
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default("claude-opus-5-5"),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4.1"),
+  OPENAI_BASE_URL: z.string().url().default("https://api.openai.com/v1"),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  /** Any OpenAI-compatible chat endpoint (Ollama: http://localhost:11434/v1, Groq, Together…). */
+  AI_COMPAT_BASE_URL: z.string().url().optional(),
+  AI_COMPAT_MODEL: z.string().optional(),
+  AI_COMPAT_API_KEY: z.string().optional(),
+  AI_COMPAT_VISION: z
+    .string()
+    .default("0")
+    .transform((v) => v === "1" || v.toLowerCase() === "true"),
   AI_DAILY_REQUEST_LIMIT: z.coerce.number().int().default(50),
 
   REVENUECAT_WEBHOOK_SECRET: z.string().optional(),

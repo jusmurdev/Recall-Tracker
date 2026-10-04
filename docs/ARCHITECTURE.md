@@ -107,9 +107,18 @@ Location is a phone-side capability with a deliberately thin server footprint:
 
 ## Scanning (`scan/`)
 
-- **Products**: the phone scans UPC/EAN barcodes with the camera or runs ML Kit OCR on a
-  label photo, then `POST /v1/scan/match` extracts brand/terms (`scan/extract.ts`) and runs
-  the matcher. The screen auto-submits after OCR; no form in between.
+- **On-device OCR** (`apps/mobile/modules/vision-ocr`): a local Expo module. iOS uses Apple
+  Vision's `VNRecognizeTextRequest` in `.accurate` mode (the neural recogniser, Neural
+  Engine on A12+), with language correction off for receipts so SKU codes survive; Android
+  uses ML Kit text recognition v2 with the bundled Latin model. Both return every line with a
+  normalised bounding box plus a barcode pass (`VNDetectBarcodesRequest` / ML Kit). JS
+  (`src/lib/receiptLayout.ts`) regroups lines into rows by vertical position so a receipt's
+  descriptions and prices line up before any text leaves the phone. Falls back to the
+  `@react-native-ml-kit/text-recognition` package, then to typing.
+- **Products**: the phone scans UPC/EAN barcodes with the camera, or snaps the label: OCR
+  text plus any barcode found in the still go to `POST /v1/scan/match`, which extracts
+  brand/terms (`scan/extract.ts`) and runs the matcher. The screen auto-submits; no form in
+  between.
 - **Receipts**: `scan/receipt.ts` parses OCR text into line items: detects the store and
   date, drops totals/payments/coupons, merges prices OCR'd onto their own line, handles
   "2 @ 1.29" quantity lines, expands ~200 cashier abbreviations, and guesses brands
@@ -119,6 +128,15 @@ Location is a phone-side capability with a deliberately thin server footprint:
   `ReceiptScan` so the receipt can be re-checked later as new recalls arrive. Premium users
   may send the photo; `premium/receiptDecode.ts` asks Claude for clean product names when
   the dictionary falls short.
+
+## AI providers (`ai/`)
+
+`runStructured(userId, request)` is the one entry point for premium AI: prompt + zod schema
+(+ images, web search, MCP). `ai/providers/*` implement Claude (SDK), OpenAI (Responses API),
+Gemini (generateContent) and OpenAI-compatible chat endpoints over raw HTTP; `ai/schema.ts`
+converts the zod schema to each dialect; `ai/index.ts` picks a provider by capability from
+`AI_PROVIDER` + `AI_PROVIDER_FALLBACKS`, fails over on transport errors, and records usage.
+See docs/PREMIUM.md for the capability matrix.
 
 ## Restaurant catalog, grades and maintenance (`inspections/`)
 

@@ -400,6 +400,7 @@ model AiUsage {
   userId       String?
   user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   feature      String
+  provider     String   @default("anthropic")
   model        String
   inputTokens  Int
   outputTokens Int

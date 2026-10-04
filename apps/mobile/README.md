@@ -19,6 +19,11 @@ Location features: on-device state detection (only the state is uploaded), "Near
 filter, "I'm here" restaurant pinning with nearby tracked restaurants, and geofence arrival
 alerts for tracked restaurants with active supplier recalls (Settings → Restaurant arrival alerts).
 
+On-device OCR lives in `modules/vision-ocr` (Swift + Kotlin, autolinked by Expo). After
+changing it: `npx expo prebuild --clean` then `npx expo run:ios` / `run:android`. The JS
+facade in `src/lib/ocr.ts` falls back to the ML Kit package, then to manual entry, so the app
+still works in Expo Go.
+
 Config:
 - `EXPO_PUBLIC_API_URL` or `extra.apiBaseUrl` in `app.json` — API base URL.
 - `extra.eas.projectId` — needed for Expo push tokens on real devices.
