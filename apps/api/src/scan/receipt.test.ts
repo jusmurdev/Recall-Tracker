@@ -53,7 +53,9 @@ describe("receipt parser", () => {
       "sunny valley grn juice 12 oz",
     ]);
     expect(r.items[0]).toMatchObject({ brand: "jif", price: 3.49, quantity: 1 });
-    expect(r.items[0]!.terms).toContain("creamy peanut butter");
+    expect(r.items[0]!.terms).toContain("peanut butter");
+    expect(r.items[0]!.terms).toContain("jif");
+    expect(r.items[3]!.terms).not.toContain("milk"); // generic words never stand alone
     expect(r.items[2]).toMatchObject({ price: 2.58, quantity: 2 });
     expect(r.items[4]!.terms).toContain("stanley");
     expect(r.items[5]!.terms).toContain("sunny valley");

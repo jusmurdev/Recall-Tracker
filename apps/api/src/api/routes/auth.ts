@@ -28,8 +28,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const tokenHash = sha256(token);
     const user = await prisma.user.upsert({
       where: { installId: body.installId },
-      create: { installId: body.installId, tokenHash },
-      update: { tokenHash },
+      create: { installId: body.installId, tokenHash, timezone: body.timezone },
+      update: { tokenHash, ...(body.timezone ? { timezone: body.timezone } : {}) },
     });
     return reply.send({ token, user: { id: user.id, tier: isPremium(user) ? "premium" : "free", createdAt: user.createdAt.toISOString() } });
   });
@@ -61,7 +61,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const merged = { s: body.quietHoursStart === undefined ? user.quietHoursStart : body.quietHoursStart, e: body.quietHoursEnd === undefined ? user.quietHoursEnd : body.quietHoursEnd };
       if ((merged.s == null) !== (merged.e == null)) throw new HttpProblem(400, "validation", "Set both quietHoursStart and quietHoursEnd, or neither.");
     }
-    const updated = await prisma.user.update({ where: { id: user.id }, data: body });
+    const { homeState, ...prefs } = body;
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { ...prefs, ...(homeState !== undefined ? { homeState } : {}) } });
     return prefsOf(updated);
   });
 

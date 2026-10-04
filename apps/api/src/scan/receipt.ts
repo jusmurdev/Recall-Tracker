@@ -5,6 +5,8 @@
  * deterministic so the free tier works offline; premium can ask Claude to decode the rest.
  */
 
+import { productTerms } from "./terms.js";
+
 export interface ReceiptLine {
   /** Text as printed. */
   raw: string;
@@ -127,14 +129,13 @@ export function guessBrand(expanded: string, raw: string): string | null {
 }
 
 export function termsFor(expanded: string, brand: string | null): string[] {
-  const words = expanded.split(" ").filter((w) => w.length >= 3 && !/^\d/.test(w) && !UNITS.has(w) && !STOP.has(w));
-  const out = new Set<string>();
-  if (brand) out.add(brand);
-  // Product phrase without the brand and size: up to 3 significant words.
-  const core = words.filter((w) => !brand || !brand.split(" ").includes(w)).slice(0, 4);
-  if (core.length >= 2) out.add(core.slice(0, 3).join(" "));
-  for (const w of core) if (w.length >= 4) out.add(w);
-  return [...out].slice(0, 6);
+  // Same vocabulary as the label scanner (scan/terms.ts), so a receipt line and a typed name for
+  // the same product get the same verdict.
+  const withoutUnits = expanded
+    .split(" ")
+    .filter((w) => !/^\d/.test(w) && !UNITS.has(w))
+    .join(" ");
+  return productTerms(withoutUnits, { brand, max: 6 });
 }
 
 /**
@@ -198,11 +199,9 @@ export function parseReceipt(text: string): ParsedReceipt {
     }
     const expanded = expandLine(desc);
     const brand = guessBrand(expanded, desc);
+    // A line with no usable terms ("MILK") stays on the list so the user sees it was read; it
+    // simply cannot match anything and reads as clear.
     const terms = termsFor(expanded, brand);
-    if (!terms.length) {
-      skipped += 1;
-      continue;
-    }
     items.push({ raw: desc, product: expanded, brand, terms, price, quantity: pendingQty });
     pendingQty = 1;
   }

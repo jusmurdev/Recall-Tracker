@@ -17,6 +17,9 @@ const NOISE = new Set([
   "since", "est", "original", "real", "premium", "classic", "family", "pack", "count", "ct", "pcs", "piece", "pieces",
 ]);
 
+import { isGeneric, productTerms } from "./terms.js";
+import { cleanGtinInput } from "./gtin.js";
+
 export interface ExtractedProduct {
   brand: string | null;
   terms: string[];
@@ -38,6 +41,7 @@ export function extractFromOcr(ocrText: string | undefined, context?: string, up
     if (alpha < 0.7) continue;
     if (words.every((w) => NOISE.has(w.toLowerCase()))) continue;
     if (/\d{3,}/.test(line)) continue;
+    if (words.every((w) => isGeneric(w))) continue; // "MILK", "DOG FOOD": a kind of product, not a brand
     brand = toTitle(line);
     break;
   }
@@ -67,14 +71,21 @@ export function extractFromOcr(ocrText: string | undefined, context?: string, up
     for (const w of words) bump(w, 1);
   }
 
-  const terms = [...scores.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([t]) => t)
-    .filter((t, i, arr) => !arr.slice(0, i).some((prev) => prev.includes(t) && prev !== t)) // drop words already covered by a kept phrase
-    .slice(0, 8);
+  // A typed product name ("Prairie Paws dog food") is one or two short lines; route it through
+  // the same vocabulary the receipt parser uses so both paths agree on what to look for.
+  const typed = lines.length <= 2 && lines.join(" ").split(" ").length <= 8;
+  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  let terms: string[];
+  if (typed) {
+    terms = productTerms([...lines, context ?? ""].join(" "), { brand, max: 8 });
+  } else {
+    // Keep phrases and distinctive words. A generic single word ("milk", "food") is never a term
+    // on its own: every dairy recall mentions milk.
+    terms = ranked.filter((t) => t.includes(" ") || !isGeneric(t)).slice(0, 8);
+    if (!terms.length) terms = ranked.slice(0, 3);
+  }
 
-  const upcClean = upc?.replace(/\D/g, "");
-  return { brand, terms, upc: upcClean && upcClean.length >= 8 ? upcClean : null };
+  return { brand, terms, upc: cleanGtinInput(upc) };
 }
 
 function toTitle(s: string): string {

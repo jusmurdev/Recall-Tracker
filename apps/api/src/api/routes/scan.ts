@@ -9,8 +9,9 @@ import { parseReceipt, termsFor, type ReceiptLine } from "../../scan/receipt.js"
 import { isPremium } from "../plugins/auth.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../db/client.js";
-import { findRecallsForItem, recordAlertsForItem } from "../../matching/engine.js";
+import { recordAlertsForItem } from "../../matching/engine.js";
 import { identifyProduct } from "../../premium/scanIdentify.js";
+import { checkProduct } from "../../scan/check.js";
 import { extractFromOcr } from "../../scan/extract.js";
 import { HttpProblem, requirePremium, requireUser } from "../plugins/auth.js";
 import { serializeRecall, serializeWatchItem } from "../serialize.js";
@@ -26,8 +27,9 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     if (!body.ocrText && !body.upc) throw new HttpProblem(400, "validation", "Provide ocrText and/or upc.");
     const extracted = extractFromOcr(body.ocrText, body.context, body.upc);
     const terms = extracted.terms;
-    const probe = { id: "probe", userId: user.id, kind: "scan" as const, label: extracted.brand ?? terms[0] ?? body.upc ?? "scan", terms, upc: extracted.upc, categories: [], homeState: user.homeState };
-    const matches = await findRecallsForItem(probe, { limit: 10 });
+    const label = extracted.brand ?? terms[0] ?? body.upc ?? "scan";
+    const check = await checkProduct(user, { label, terms, upc: extracted.upc });
+    const { matches } = check;
 
     let watchItem = null;
     if (body.watch) {
@@ -35,17 +37,18 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
         data: {
           userId: user.id,
           kind: extracted.upc && !terms.length ? "upc" : "scan",
-          label: probe.label.slice(0, 120),
+          label: label.slice(0, 120),
           terms,
           upc: extracted.upc,
           context: body.context,
           ocrText: body.ocrText,
         },
       });
-      await recordAlertsForItem({ ...watchItem, homeState: user.homeState }, matches);
+      await recordAlertsForItem({ ...watchItem, homeState: user.homeState, lastKnownState: user.lastKnownState }, matches);
     }
     return {
       extracted,
+      status: check.status,
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
       watchItem: watchItem ? serializeWatchItem(watchItem) : null,
     };
@@ -64,11 +67,12 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
       .parse(req.body);
     const identified = await identifyProduct(user.id, { base64: body.imageBase64, mediaType: body.mediaType }, body.ocrText, body.context);
     const terms = [...new Set([identified.brand, identified.productName, ...identified.searchTerms].filter((t): t is string => !!t).map((t) => t.toLowerCase()))].slice(0, 8);
-    const probe = { id: "probe", userId: user.id, kind: "scan" as const, label: [identified.brand, identified.productName].filter(Boolean).join(" ") || "scan", terms, upc: identified.upc, categories: [], homeState: user.homeState };
-    const matches = await findRecallsForItem(probe, { limit: 10 });
+    const check = await checkProduct(user, { label: [identified.brand, identified.productName].filter(Boolean).join(" ") || "scan", terms, upc: identified.upc });
+    const { matches } = check;
     return {
       identified,
       extracted: { brand: identified.brand, terms, upc: identified.upc },
+      status: check.status,
       matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })),
     };
   });
@@ -117,10 +121,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     const items: ReceiptItem[] = [];
     let flagged = 0;
     for (const line of lines) {
-      const probe = { id: "probe", userId: user.id, kind: "scan" as const, label: line.product, terms: line.terms, upc: null, categories: [], homeState: user.homeState, lastKnownState: user.lastKnownState };
-      const matches = await findRecallsForItem(probe, { limit: 5 });
-      const best = matches[0]?.match.score ?? 0;
-      const status = best >= 0.65 ? "recalled" : best >= 0.45 ? "possible" : "clear";
+      const { matches, status } = await checkProduct(user, { label: line.product, terms: line.terms }, { limit: 5 });
       if (status !== "clear") flagged += 1;
       let watchItemId: string | null = null;
       if (body.watch) {
@@ -169,9 +170,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     const items: ReceiptItem[] = [];
     let flagged = 0;
     for (const line of stored) {
-      const matches = await findRecallsForItem({ id: "probe", userId: user.id, kind: "scan", label: line.product, terms: line.terms, upc: null, categories: [], homeState: user.homeState, lastKnownState: user.lastKnownState }, { limit: 5 });
-      const best = matches[0]?.match.score ?? 0;
-      const status = best >= 0.65 ? "recalled" : best >= 0.45 ? "possible" : "clear";
+      const { matches, status } = await checkProduct(user, { label: line.product, terms: line.terms }, { limit: 5 });
       if (status !== "clear") flagged += 1;
       items.push({ raw: line.raw, product: line.product, brand: line.brand, terms: line.terms, status, watchItemId: line.watchItemId ?? null, matches: matches.map((m) => ({ recall: serializeRecall(m.recall), reason: m.match.reason, score: m.match.score, explanation: m.match.explanation })) });
     }

@@ -1,5 +1,6 @@
 import type { Alert as DbAlert, Connector as DbConnector, Recall as DbRecall, WatchItem as DbWatchItem } from "@prisma/client";
 import type { Alert, Connector, Recall, WatchItem } from "@recall/shared";
+import { cleanHeadline } from "../ingest/headline.js";
 
 export function serializeRecall(r: DbRecall): Recall {
   return {
@@ -24,6 +25,7 @@ export function serializeRecall(r: DbRecall): Recall {
     imageUrls: r.imageUrls,
     codeInfo: r.codeInfo,
     remedy: r.remedy,
+    headline: cleanHeadline(r),
   };
 }
 

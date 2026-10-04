@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { US_STATES } from "@recall/shared";
+import { normalizeGtin } from "../scan/gtin.js";
 import type { NormalizedRecall } from "./types.js";
 
 const STATE_NAMES: Record<string, string> = {
@@ -72,7 +73,8 @@ export function extractUpcs(text: string | null | undefined): string[] {
   }
   // Bare 12–14 digit numbers (GTIN-12/13/14) not glued to other digits.
   for (const m of text.matchAll(/(?<!\d)(\d{12,14})(?!\d)/g)) out.add(m[1]!);
-  return [...out];
+  // Stored as GTIN-14 so UPC-A and its EAN-13 form compare equal.
+  return [...new Set([...out].map(normalizeGtin))];
 }
 
 /** Collapse whitespace and strip HTML tags from source text. */
@@ -129,11 +131,30 @@ export function toIsoDate(d: Date): string {
 export function extractBrands(text: string | null | undefined): string[] {
   if (!text) return [];
   const out = new Set<string>();
-  for (const m of text.matchAll(/["“]([^"”]{2,60})["”]/g)) out.add(m[1]!.trim());
-  for (const m of text.matchAll(/\b([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,3})\s+[Bb]rand\b/g)) out.add(m[1]!.trim());
-  for (const m of text.matchAll(/\b[Bb]rand(?:\s+name)?s?:?\s+([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,3})/g)) out.add(m[1]!.trim());
-  return [...out].filter((b) => b.length >= 2 && b.length <= 60 && !/^(the|and|lot|upc|best by|use by)$/i.test(b));
+  const add = (b: string | undefined) => {
+    const v = (b ?? "").replace(/[®™©]/g, "").replace(/\s+/g, " ").trim().replace(/[,.;:]+$/, "");
+    if (v.length >= 2 && v.length <= 60 && !BRAND_STOP.test(v)) out.add(v);
+  };
+  for (const m of text.matchAll(/["“]([^"”]{2,60})["”]/g)) add(m[1]);
+  for (const m of text.matchAll(/\b([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,3})\s+[Bb]rand\b/g)) add(m[1]);
+  for (const m of text.matchAll(/\b[Bb]rand(?:\s+name)?s?:?\s+([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,3})/g)) add(m[1]);
+  // "Jif® Creamy…", "KIRKLAND SIGNATURE™": a trademark symbol marks the brand.
+  for (const m of text.matchAll(/\b([A-Za-z][\w&'’.-]*(?:\s+[A-Za-z][\w&'’.-]*){0,2})\s?[®™]/g)) add(m[1]);
+  // "sold under the Great Value label", "marketed as Nature's Promise", "labeled as X".
+  for (const m of text.matchAll(/\b(?:under the|marketed as|labeled as|labelled as|sold as|branded as)\s+([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,3})(?:\s+(?:brand|label|name))?/g)) add(m[1]);
+  // Leading proper-noun run before the first generic product word: "Prairie Paws Freeze-Dried…" → "Prairie Paws".
+  const lead = text.trimStart().match(/^([A-Z][\w&'’.-]*(?:\s+[A-Z][\w&'’.-]*){0,2})\s+(?=[A-Z][a-z]|[a-z])/);
+  if (lead && !/^(the|a|an|recall|recalled|product|products|all|various|certain)\b/i.test(lead[1]!) && !/\b(inc|llc|co|corp|ltd)\b\.?$/i.test(lead[1]!)) {
+    // Keep only the words before an obviously generic one ("Jif Creamy" → "Jif").
+    const words = lead[1]!.split(/\s+/);
+    const cut = words.findIndex((w) => GENERIC_LEAD.has(w.toLowerCase().replace(/[^a-z]/g, "")));
+    add((cut === -1 ? words : words.slice(0, cut)).join(" "));
+  }
+  return [...out];
 }
+
+const BRAND_STOP = /^(the|and|lot|lots|upc|best by|use by|sell by|exp|item|model|net wt|all|various|certain|product|products|recall|recalled|see|note|dist|distributed|manufactured|packed|produced|ingredients|contains|may contain)$/i;
+const GENERIC_LEAD = new Set(["cold", "coldpressed", "pressed", "readytoeat", "readyto", "creamy", "crunchy", "organic", "natural", "fresh", "frozen", "whole", "raw", "freeze", "freezedried", "dried", "ready", "sliced", "smoked", "roasted", "premium", "original", "classic", "chicken", "beef", "pork", "turkey", "dog", "cat", "pet", "baby", "infant", "ground", "deli", "cold", "hot", "sweet", "spicy", "mild", "light", "dark", "white", "brown", "green", "red", "blue", "black", "golden", "mixed", "assorted", "select", "family", "value"]);
 
 /**
  * Pull the "what consumers should do" guidance out of recall prose. Agencies phrase it

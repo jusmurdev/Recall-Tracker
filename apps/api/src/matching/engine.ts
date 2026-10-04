@@ -3,6 +3,8 @@ import type { MatchReason } from "@recall/shared";
 import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
 import { enqueuePushForAlerts } from "../jobs/queues.js";
+import { isGenericTerm, termWeight } from "../scan/terms.js";
+import { normalizeGtin } from "../scan/gtin.js";
 
 /** Alerts below this score are stored (visible in the inbox) but not pushed. */
 export const PUSH_THRESHOLD = 0.5;
@@ -51,41 +53,55 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     score = 1;
     explanation = `Barcode ${item.upc} is listed in this recall.`;
   } else if (matchedTerms.length) {
+    // A generic word on its own ("milk", "dog food") describes a kind of product, not a product.
+    // Every dairy recall mentions milk, so such a hit is noise unless something distinctive
+    // matched alongside it.
+    const distinctive = matchedTerms.filter((t) => !isGenericTerm(t));
+    const genericOnly = !distinctive.length;
+    if (genericOnly && item.kind === "scan") return null;
     const lowerCompany = recall.company.toLowerCase();
     const lowerBrands = recall.brands.map((b) => b.toLowerCase());
     // Brand names lead product descriptions ("Jif Creamy Peanut Butter…"), so the first few
     // words of the description count as brand territory alongside company + extracted brands.
     const lead = recall.productDescription.toLowerCase().slice(0, 40);
-    const companyHit = matchedTerms.some((t) => lowerCompany.includes(t) || lowerBrands.some((b) => b.includes(t) || t.includes(b)));
-    const leadHit = !companyHit && matchedTerms.some((t) => lead.includes(t));
+    const companyHit = distinctive.some((t) => lowerCompany.includes(t) || lowerBrands.some((b) => b.includes(t) || t.includes(b)));
+    const leadHit = !companyHit && distinctive.some((t) => lead.includes(t));
     const brandHit = companyHit || leadHit;
-    const coverage = Math.min(1, matchedTerms.length / Math.max(1, item.terms.length));
+    // Weighted coverage: phrases and brand-like words count, generic words barely do.
+    const total = item.terms.reduce((acc, t) => acc + termWeight(t), 0) || 1;
+    const hit = matchedTerms.reduce((acc, t) => acc + termWeight(t), 0);
+    const coverage = Math.min(1, hit / total);
+    const shown = [...distinctive, ...matchedTerms.filter((t) => isGenericTerm(t))].slice(0, 3).join(", ");
+    const companyHitOrGeneric = companyHit;
     if (item.kind === "restaurant") {
       reason = "restaurant_supplier";
       score = 0.55 + 0.3 * coverage;
-      explanation = `${item.label}: a supplier or ingredient we found (${matchedTerms.join(", ")}) appears in this recall.`;
+      explanation = `${item.label}: a supplier or ingredient we found (${shown}) appears in this recall.`;
     } else if (item.kind === "scan") {
       reason = "scan_text_match";
       score = (brandHit ? 0.7 : 0.5) + 0.3 * coverage;
-      explanation = `Label text you scanned (${matchedTerms.join(", ")}) matches this recall.`;
+      explanation = `Label text you scanned (${shown}) matches this recall.`;
     } else if (brandHit) {
       reason = "brand_match";
       // A hit on the recalling company / extracted brand list outranks the weaker
       // "appears at the start of the product description" heuristic, so ties resolve deterministically.
       score = (companyHit ? 0.75 : 0.7) + 0.25 * coverage;
-      explanation = `Brand/company match on ${matchedTerms.join(", ")}.`;
+      explanation = `Brand/company match on ${shown}.`;
     } else {
       reason = "text_match";
       score = 0.45 + 0.4 * coverage;
-      explanation = `Product description mentions ${matchedTerms.join(", ")}.`;
+      explanation = `Product description mentions ${shown}.`;
     }
+    // Someone who deliberately watches "milk" still hears about milk recalls, just never as a
+    // top-confidence match.
+    if (genericOnly && !companyHitOrGeneric) score = Math.min(score, 0.6);
   } else {
     return null;
   }
 
   // Down-rank recalls not distributed where the user lives or currently is (never suppress:
   // distribution lists are incomplete and people travel).
-  const userStates = [item.homeState, item.lastKnownState].filter((s): s is string => !!s);
+  const userStates = [...new Set([item.homeState, item.lastKnownState].filter((s): s is string => !!s))];
   if (userStates.length && recall.distributionStates.length && !recall.distributionStates.includes("US") && !userStates.some((s) => recall.distributionStates.includes(s))) {
     score *= 0.6;
     explanation += ` Not reported as distributed in ${userStates.join(" or ")}.`;
@@ -123,6 +139,7 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
   for (const recall of recalls) {
     const text = recallText(recall);
     const plain = normalizeForMatch(text);
+    const recallGtins = recall.upcs.map(normalizeGtin);
     // A term matches when it appears verbatim, appears after stripping punctuation
     // ("boars head" vs "Boar's Head"), or is trigram-similar to a substring of the text.
     const termMatches = Prisma.sql`
@@ -135,10 +152,10 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
           SELECT t FROM unnest(wi.terms) AS t
           WHERE length(regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g')) >= 2 AND (${termMatches})
         )::text[] AS matched_terms,
-        (wi.upc IS NOT NULL AND wi.upc = ANY(${recall.upcs}::text[])) AS upc_hit
+        (wi.upc IS NOT NULL AND lpad(wi.upc, 14, '0') = ANY(${recallGtins}::text[])) AS upc_hit
       FROM "WatchItem" wi
       JOIN "User" u ON u.id = wi."userId"
-      WHERE (wi.upc IS NOT NULL AND wi.upc = ANY(${recall.upcs}::text[]))
+      WHERE (wi.upc IS NOT NULL AND lpad(wi.upc, 14, '0') = ANY(${recallGtins}::text[]))
          OR EXISTS (
           SELECT 1 FROM unnest(wi.terms) AS t
           WHERE length(regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g')) >= 2 AND (${termMatches})
@@ -225,9 +242,10 @@ export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDa
   if (item.kind === "category") return findRecallsForSubscription(item, lookback, limit);
   const terms = item.terms.map((t) => t.toLowerCase()).filter((t) => t.length >= 2);
   if (!terms.length && !item.upc) return [];
+  const gtin = item.upc ? normalizeGtin(item.upc) : null;
 
   const conditions: Prisma.Sql[] = [];
-  if (item.upc) conditions.push(Prisma.sql`${item.upc} = ANY(r.upcs)`);
+  if (gtin) conditions.push(Prisma.sql`${gtin} = ANY(ARRAY(SELECT lpad(u, 14, '0') FROM unnest(r.upcs) AS u))`);
   const haystack = Prisma.sql`lower(r.title || ' ' || r."productDescription" || ' ' || r.company || ' ' || array_to_string(r.brands, ' '))`;
   for (const t of terms) {
     const like = `%${escapeLike(t)}%`;
@@ -255,7 +273,7 @@ export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDa
     const text = recallText(recall);
     const plain = normalizeForMatch(text);
     const matched = terms.filter((t) => text.includes(t) || plain.includes(normalizeForMatch(t)) || fuzzyIncludes(text, t));
-    const upcHit = !!item.upc && recall.upcs.includes(item.upc);
+    const upcHit = !!gtin && recall.upcs.some((u) => normalizeGtin(u) === gtin);
     const match = scoreMatch(item, recall, matched, upcHit);
     if (match) out.push({ recall, match });
   }

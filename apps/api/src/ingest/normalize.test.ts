@@ -24,12 +24,12 @@ describe("parseDistributionStates", () => {
 
 describe("extractUpcs", () => {
   it("handles spaced and dashed UPC formats", () => {
-    expect(extractUpcs("Jif Creamy, UPC 0 51500 24128 1. Lot 1274425")).toEqual(["051500241281"]);
-    expect(extractUpcs("UPC Code 4-11303-21309")).toEqual(["41130321309"]);
-    expect(extractUpcs("UPC: 851234007011")).toEqual(["851234007011"]);
+    expect(extractUpcs("Jif Creamy, UPC 0 51500 24128 1. Lot 1274425")).toEqual(["00051500241281"]);
+    expect(extractUpcs("UPC Code 4-11303-21309")).toEqual(["00041130321309"]);
+    expect(extractUpcs("UPC: 851234007011")).toEqual(["00851234007011"]);
   });
   it("ignores short digit runs and dedupes", () => {
-    expect(extractUpcs("Lot 1274425 UPC 851234007011 and 851234007011")).toEqual(["851234007011"]);
+    expect(extractUpcs("Lot 1274425 UPC 851234007011 and 851234007011")).toEqual(["00851234007011"]);
   });
   it("finds bare GTINs", () => {
     expect(extractUpcs("Item 00012345678905 on shelf")).toEqual(["00012345678905"]);

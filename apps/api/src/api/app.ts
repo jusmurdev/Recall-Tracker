@@ -33,10 +33,25 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return reply.status(409).send({ error: "conflict", code: "conflict", message: "Already exists" });
     }
+    // Fastify's own errors (bad JSON, wrong content type, too big, rate limited…) get the same
+    // { error, code, message } shape as ours so clients can branch on `code` everywhere.
     const status = typeof (err as { statusCode?: number }).statusCode === "number" ? (err as { statusCode: number }).statusCode : 500;
     if (status >= 500) logger.error({ err }, "unhandled error");
-    return reply.status(status).send({ error: status >= 500 ? "internal" : "request_error", message: status >= 500 ? "Internal error" : (err as Error).message });
+    const fastifyCode = (err as { code?: string }).code ?? "";
+    const code =
+      status >= 500 ? "internal"
+      : fastifyCode === "FST_ERR_CTP_INVALID_JSON_BODY" || fastifyCode === "FST_ERR_CTP_EMPTY_JSON_BODY" ? "bad_json"
+      : fastifyCode === "FST_ERR_CTP_INVALID_MEDIA_TYPE" || status === 415 ? "unsupported_media_type"
+      : fastifyCode === "FST_ERR_CTP_BODY_TOO_LARGE" || status === 413 ? "payload_too_large"
+      : status === 429 ? "rate_limited"
+      : status === 404 ? "not_found"
+      : status === 401 ? "unauthenticated"
+      : status === 400 ? "validation"
+      : "request_error";
+    const message = status >= 500 ? "Internal error" : code === "bad_json" ? "The request body is not valid JSON." : code === "unsupported_media_type" ? "Send JSON (Content-Type: application/json)." : (err as Error).message;
+    return reply.status(status).send({ error: code, code, message });
   });
+  app.setNotFoundHandler((req, reply) => reply.status(404).send({ error: "not_found", code: "not_found", message: `No route for ${req.method} ${req.url}` }));
 
   app.get("/health", async () => ({ ok: true, time: new Date().toISOString() }));
 

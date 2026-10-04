@@ -151,6 +151,81 @@ describe("HTTP API (integration)", () => {
     expect((await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: {} })).statusCode).toBe(400);
   });
 
+  it("gives a typed product name and a receipt line the same verdict (device bugs 2, 5, 6)", async () => {
+    // Short typed names used to collapse into one whole-phrase term that is not a substring of the title.
+    const typed = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Prairie Paws dog food" } });
+    expect(typed.statusCode).toBe(200);
+    expect(typed.json().status).toBe("recalled");
+    expect(typed.json().matches[0].recall.sourceId).toBe("F-1471-2026");
+    expect(typed.json().matches[0].score).toBeGreaterThanOrEqual(0.65);
+
+    // The same words on a receipt land on the same recall with the same verdict.
+    const receipt = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: "PETSMART\nPRAIRIE PAWS DOG FOOD 24.99\nMILK 3.19\nTOTAL 28.18" } });
+    const items = receipt.json().items as Array<{ product: string; status: string; matches: Array<{ recall: { sourceId: string } }> }>;
+    const paws = items.find((i) => i.product.startsWith("prairie paws"))!;
+    expect(paws.status).toBe("recalled");
+    expect(paws.matches[0].recall.sourceId).toBe("F-1471-2026");
+    // A single generic word can never flag a product: every dairy recall mentions milk.
+    expect(items.find((i) => i.product === "milk")!.status).toBe("clear");
+    expect((await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "MILK" } })).json().status).toBe("clear");
+
+    // A different dog food is not dragged in by the generic words.
+    const other = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Acme Kibble dog food" } });
+    expect(other.json().matches.map((m: { recall: { sourceId: string } }) => m.recall.sourceId)).not.toContain("F-1471-2026");
+  });
+
+  it("treats UPC-A, EAN-13 and spaced barcodes as the same code (device bug 7)", async () => {
+    for (const upc of ["087654321098", "0087654321098", "0 87654 32109 8", "00087654321098"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { upc } });
+      expect(res.statusCode, upc).toBe(200);
+      expect(res.json().matches[0]?.reason, upc).toBe("upc_exact");
+      expect(res.json().matches[0]?.recall.sourceId, upc).toBe("F-1471-2026");
+    }
+    expect((await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { upc: "12 34" } })).statusCode).toBe(400);
+  });
+
+  it("escapes LIKE wildcards in search and validates state codes (device bugs 11, 13)", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?q=%25" })).json().items).toHaveLength(0);
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?q=_" })).json().items).toHaveLength(0);
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?state=ZZ" })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: "/v1/recalls?state=ca" })).statusCode).toBe(200);
+    expect((await app.inject({ method: "PUT", url: "/v1/me/location", headers: auth(), payload: { state: "XX" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { homeState: "QQ" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: auth(), payload: { homeState: "tx" } })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: "/v1/me", headers: auth() })).json().homeState).toBe("TX");
+  });
+
+  it("de-duplicates watch items, derives terms from the label and strips HTML (device bugs 10, 14, 16)", async () => {
+    const first = await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "product", label: "<b>Skippy</b> peanut butter" } });
+    expect(first.statusCode).toBe(201);
+    expect(first.json().item.label).toBe("Skippy peanut butter");
+    expect(first.json().item.terms).toContain("skippy");
+    const again = await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "product", label: "skippy PEANUT butter" } });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().duplicate).toBe(true);
+    expect(again.json().item.id).toBe(first.json().item.id);
+    expect((await app.inject({ method: "POST", url: "/v1/watchlist", headers: auth(), payload: { kind: "product", label: "" } })).statusCode).toBe(400);
+  });
+
+  it("returns a consistent error shape for framework-level errors (device bug 15)", async () => {
+    const badJson = await app.inject({ method: "POST", url: "/v1/watchlist", headers: { ...auth(), "content-type": "application/json" }, payload: "{not json" });
+    expect(badJson.statusCode).toBe(400);
+    expect(badJson.json()).toMatchObject({ error: "bad_json", code: "bad_json" });
+    const wrongType = await app.inject({ method: "POST", url: "/v1/watchlist", headers: { ...auth(), "content-type": "application/xml" }, payload: "<hello/>" });
+    expect(wrongType.statusCode).toBe(415);
+    expect(wrongType.json()).toMatchObject({ error: "unsupported_media_type", code: "unsupported_media_type" });
+    const missing = await app.inject({ method: "GET", url: "/v1/nope" });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().code).toBe("not_found");
+  });
+
+  it("serves a cleaned headline with every recall (device bug 9)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/recalls?q=jif" });
+    const jif = res.json().items.find((r: { sourceId: string }) => r.sourceId === "F-1456-2026");
+    expect(jif.headline).toBe("Jif Creamy Peanut Butter");
+    expect(jif.headline.length).toBeLessThanOrEqual(70);
+  });
+
   it("gates premium features behind the tier", async () => {
     const restaurant = await app.inject({
       method: "POST",

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { Prisma } from "@prisma/client";
 import { RecallListQuery } from "@recall/shared";
 import { prisma } from "../../db/client.js";
+import { escapeLike } from "../../matching/engine.js";
 import { HttpProblem } from "../plugins/auth.js";
 import { serializeRecall } from "../serialize.js";
 
@@ -41,7 +42,7 @@ export async function recallRoutes(app: FastifyInstance): Promise<void> {
       const rows = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
         SELECT id FROM "Recall"
         WHERE "searchVector" @@ websearch_to_tsquery('english', ${q.q})
-           OR lower(title || ' ' || company) LIKE ${`%${q.q.toLowerCase()}%`}
+           OR lower(title || ' ' || company) LIKE ${`%${escapeLike(q.q.toLowerCase())}%`}
         ORDER BY ts_rank("searchVector", websearch_to_tsquery('english', ${q.q})) DESC, "publishedAt" DESC
         LIMIT 500
       `);

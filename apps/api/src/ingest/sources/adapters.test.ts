@@ -31,7 +31,7 @@ describe("FDA adapter", () => {
     expect(items.map((i) => i.sourceId).sort()).toEqual(["D-0211-2026", "F-1399-2026", "F-1456-2026", "F-1460-2026", "F-1471-2026"]);
     const jif = items.find((i) => i.sourceId === "F-1456-2026")!;
     expect(jif.severity).toBe("critical");
-    expect(jif.upcs).toEqual(["051500241281"]);
+    expect(jif.upcs).toEqual(["00051500241281"]);
     expect(jif.distributionStates).toEqual(["US"]);
     expect(jif.company).toBe("J.M. Smucker Co.");
     expect(jif.title).toMatch(/^J\.M\. Smucker Co\.: Jif Creamy Peanut Butter/);
@@ -40,7 +40,7 @@ describe("FDA adapter", () => {
     const juice = items.find((i) => i.sourceId === "F-1460-2026")!;
     expect(juice.distributionStates).toEqual(["AZ", "CA", "NV", "OR"]);
     expect(juice.brands).toContain("Sunny Valley");
-    expect(juice.upcs).toEqual(["851234007011"]);
+    expect(juice.upcs).toEqual(["00851234007011"]);
     const pet = items.find((i) => i.sourceId === "F-1471-2026")!;
     expect(pet.category).toBe("veterinary");
     expect(items.find((i) => i.sourceId === "F-1399-2026")!.status).toBe("completed");
@@ -61,7 +61,7 @@ describe("FSIS adapter", () => {
     expect(bh.severity).toBe("critical");
     expect(bh.category).toBe("meat_poultry");
     expect(bh.status).toBe("ongoing");
-    expect(bh.upcs).toEqual(["042421055051"]);
+    expect(bh.upcs).toEqual(["00042421055051"]);
     expect(bh.url).toBe("https://www.fsis.usda.gov/recalls-alerts/boars-head-provisions-co-recalls-ready-eat-liverwurst-products-due-possible-listeria");
     expect(bh.summary).not.toContain("<p>");
     expect(bh.codeInfo).toMatch(/sell-by dates 10\/15\/2026/i);
@@ -84,7 +84,7 @@ describe("CPSC adapter", () => {
     const items = await new CpscAdapter(fixtureFetcher).fetch(window);
     expect(items).toHaveLength(2);
     const mug = items.find((i) => i.sourceId === "27-001")!;
-    expect(mug.upcs.sort()).toEqual(["041604302046", "041604302211"]);
+    expect(mug.upcs.sort()).toEqual(["00041604302046", "00041604302211"]);
     expect(mug.company).toBe("Pacific Market International (Stanley)");
     expect(mug.category).toBe("consumer_product");
     expect(mug.imageUrls).toHaveLength(1);

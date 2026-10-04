@@ -9,6 +9,7 @@
  */
 import { fetchJson } from "../../lib/http.js";
 import { cleanText, extractRemedy, extractUpcs, parseLooseDate, toIsoDate, truncate } from "../normalize.js";
+import { normalizeGtin } from "../../scan/gtin.js";
 import type { FetchWindow, NormalizedRecall, SourceAdapter } from "../types.js";
 import type { RecallSeverity } from "@recall/shared";
 
@@ -65,7 +66,7 @@ export function normalizeCpscRecord(rec: CpscRecord): NormalizedRecall {
   const upcs = new Set<string>();
   for (const u of rec.ProductUPCs ?? []) {
     const digits = (u.UPC ?? "").replace(/\D/g, "");
-    if (digits.length >= 8 && digits.length <= 14) upcs.add(digits);
+    if (digits.length >= 8 && digits.length <= 14) upcs.add(normalizeGtin(digits));
   }
   for (const u of extractUpcs(desc)) upcs.add(u);
   const recallDate = parseLooseDate(rec.RecallDate);
