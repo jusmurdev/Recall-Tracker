@@ -14,6 +14,7 @@ No AI is required; an optional premium step can classify ambiguous ingredient wo
 | Gluten-free | `gluten_free` | Wheat, barley, rye, malt, brewer's yeast, spelt, farro, seitan, "contains gluten"… |
 | Halal diet | `halal` | Haram ingredients named in the text: pork and derivatives, lard, alcohol and spirits, carmine/cochineal, "non-halal". Labels "Halal" and "Haram" both appear in the UI copy; they are one preference. |
 | Kosher | `kosher` | (a) explicit non-kosher ingredients (pork, shellfish, lard…), (b) a named kosher certifier or mark (Orthodox Union, OU-D, OK, Star-K, KOF-K, cRc, "kosher certified"), (c) meat-and-dairy cross-contact wording |
+| Vegan | `vegan` | Animal-derived ingredients named in the text: meat, poultry, fish and seafood, dairy, egg, honey, gelatin, lard, carmine, isinglass, shellac, L-cysteine, "non-vegan". Like allergens, a plainly animal product ("Chicken Breast") recalled for another reason is not an alert; a mislabeled "vegan" product that contains egg is. No severity floor (not a health risk). |
 
 Selections live on `User.dietProfiles` and `User.otherAllergens` (plain string arrays), are
 edited through `PATCH /v1/me/preferences`, returned by `GET /v1/me` as `diet`, and deleted with
@@ -21,7 +22,7 @@ the account (`DELETE /v1/me`).
 
 ## The dictionary
 
-`apps/api/src/diet/dictionary.ts`, `DICTIONARY_VERSION = 1`. One entry per profile:
+`apps/api/src/diet/dictionary.ts`, `DICTIONARY_VERSION = 2`. One entry per profile:
 
 - `terms`: a mention means the thing is present or suspected. Includes synonyms, derived
   ingredients and hidden sources.
@@ -45,13 +46,14 @@ Matching rules (`apps/api/src/diet/match.ts`):
   0.8, kosher certifier or meat/dairy cross-contact 0.7, haram/non-kosher ingredient in the reason
   0.75, in the product description 0.5, ambiguous 0.3–0.4 (never an alert on its own).
 - Allergen named only in the product itself ("Peanut Butter Cups" recalled for metal fragments)
-  does not alert: nothing is hidden there. It does alert when the recall is about labeling.
+  does not alert: nothing is hidden there. It does alert when the recall is about labeling. The
+  same rule applies to the vegan profile.
 
 Why recall over precision for allergies: a person with a peanut allergy would rather dismiss an
 alert about "peanut oil" than miss one. Ambiguous words are the exception because flagging
 "natural flavors" on every label would make the heads-up meaningless; allergy profiles hide
-ambiguous hits on labels, halal and kosher show them because unspecified gelatin or flavors are
-exactly their question.
+ambiguous hits on labels, halal, kosher and vegan show them because unspecified gelatin,
+glycerin or flavors are exactly their question.
 
 ## How alerts flow
 
@@ -96,6 +98,6 @@ entry in `ENTRIES`, add the toggle or chip in `apps/mobile/src/lib/diet.ts`, and
 
 ## Demo data
 
-`npm run seed:demo -w @recall/api` creates six recalls (undeclared milk, undeclared peanuts, a
-gluten/wheat mislabel, pork gelatin, an alcohol-containing sauce, a kosher-certified product) and
-gives the demo user a profile that matches all of them.
+`npm run seed:demo -w @recall/api` creates seven recalls (undeclared milk, undeclared peanuts, a
+gluten/wheat mislabel, pork gelatin, an alcohol-containing sauce, a kosher-certified product, a
+mislabeled vegan mayo containing egg) and gives the demo user a profile that matches all of them.

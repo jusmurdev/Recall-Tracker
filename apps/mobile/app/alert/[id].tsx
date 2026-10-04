@@ -79,7 +79,7 @@ export default function AlertDetail() {
                 </Text>
               </View>
             ) : null}
-            <Small>Matches come from the words in the notice and can miss things. {a.dietProfile === "halal" || a.dietProfile === "kosher" ? "This is not a certification judgment." : "Check the package before eating."}</Small>
+            <Small>Matches come from the words in the notice and can miss things. {a.dietProfile === "halal" || a.dietProfile === "kosher" ? "This is not a certification judgment." : a.dietProfile === "vegan" ? "We only see named ingredients; check the label." : "Check the package before eating."}</Small>
             <Button title="About diet alerts" variant="ghost" icon="help-circle-outline" onPress={() => router.push("/diet-info")} />
           </Card>
         ) : null}

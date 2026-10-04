@@ -47,6 +47,7 @@ describe("diet copy", () => {
       ]),
     ).toBe("2 recalls match your peanut allergy and halal diet");
     expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "allergy_other", explanation: "Undeclared mustard. You listed mustard allergy." }])).toBe("1 recall matches your mustard allergy");
+    expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "vegan", explanation: "" }])).toBe("1 recall matches your vegan diet");
     expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "allergy_peanut", explanation: "", resolvedAt: "2026-01-01T00:00:00Z" }])).toBeNull();
   });
 

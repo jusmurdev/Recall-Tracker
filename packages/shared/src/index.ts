@@ -296,8 +296,10 @@ export const DietProfile = z.enum([
   "gluten_free",
   /** Halal diet: flags haram ingredients (pork and derivatives, alcohol, non-halal gelatin, carmine…). */
   "halal",
-  /** Kosher: flags pork/shellfish, meat-and-dairy cross-contact, and recalls of kosher-certified products. */
+  /** Kosher: flags pork/shellfish, meat-and-dairy mixing, and recalls of kosher-certified products. */
   "kosher",
+  /** Vegan: flags animal-derived ingredients (meat, fish, dairy, egg, honey, gelatin, carmine…). */
+  "vegan",
 ]);
 export type DietProfile = z.infer<typeof DietProfile>;
 
@@ -314,10 +316,11 @@ export const DIET_PROFILE_LABEL: Record<DietProfile, string> = {
   gluten_free: "Gluten-free",
   halal: "Halal diet",
   kosher: "Kosher",
+  vegan: "Vegan",
 };
 
 export const DietPreferences = z.object({
-  dietProfiles: z.array(DietProfile).max(12),
+  dietProfiles: z.array(DietProfile).max(13),
   /** Free-text allergens ("mustard", "lupin"), 2–40 letters each. */
   otherAllergens: z.array(z.string().trim().min(2).max(40).regex(/^[\p{L}' -]+$/u, "Letters only")).max(10),
 });

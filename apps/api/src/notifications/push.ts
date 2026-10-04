@@ -44,7 +44,7 @@ export async function sendPushForAlerts(alertIds: string[], expoClient: Pick<Exp
   for (const alert of alerts) {
     // Respect the user's notification preferences. An undeclared allergen for someone with that
     // allergy is always at least "high" and never waits for the digest.
-    const urgentDiet = alert.reason === "diet_match" && alert.dietKind === "undeclared" && alert.dietProfile !== "halal" && alert.dietProfile !== "kosher";
+    const urgentDiet = alert.reason === "diet_match" && alert.dietKind === "undeclared" && !["halal", "kosher", "vegan"].includes(alert.dietProfile ?? "");
     const severity = urgentDiet && (alert.recall.severity === "low" || alert.recall.severity === "unknown") ? "high" : alert.recall.severity;
     const decision = decidePush(alert.user, { ...alert.recall, severity }, { bypassDigest: urgentDiet });
     if (!decision.send) {
@@ -202,7 +202,7 @@ function dietTitle(profile: string | null, explanation: string): string {
   if (!profile) return "For your diet";
   const labels: Record<string, string> = {
     allergy_milk: "Milk allergy", allergy_egg: "Egg allergy", allergy_fish: "Fish allergy", allergy_shellfish: "Shellfish allergy", allergy_tree_nut: "Tree nut allergy",
-    allergy_peanut: "Peanut allergy", allergy_wheat: "Wheat allergy", allergy_soy: "Soy allergy", allergy_sesame: "Sesame allergy", gluten_free: "Gluten-free", halal: "Halal diet", kosher: "Kosher",
+    allergy_peanut: "Peanut allergy", allergy_wheat: "Wheat allergy", allergy_soy: "Soy allergy", allergy_sesame: "Sesame allergy", gluten_free: "Gluten-free", halal: "Halal diet", kosher: "Kosher", vegan: "Vegan",
   };
   if (profile === "allergy_other") {
     const m = explanation.match(/You listed ([a-z' -]+) allergy/i);

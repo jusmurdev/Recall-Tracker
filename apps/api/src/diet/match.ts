@@ -3,7 +3,7 @@
  * and on label/receipt text. No AI, no network: the free tier runs this on every recall.
  */
 import { DIET_PROFILE_LABEL, type DietHit, type DietProfile } from "@recall/shared";
-import { ENTRIES, KOSHER_CERTIFIERS, MEAT_DAIRY_CUES, NEGATION_CUES, UNDECLARED_CUES, isAllergyProfile, type DictionaryEntry } from "./dictionary.js";
+import { ENTRIES, KOSHER_CERTIFIERS, MEAT_DAIRY_CUES, NEGATION_CUES, UNDECLARED_CUES, isAllergyProfile, isAvoidanceProfile, type DictionaryEntry } from "./dictionary.js";
 
 export type DietHitKind = DietHit["kind"];
 
@@ -148,6 +148,11 @@ export function explain(profile: string, kind: DietHitKind, phrase: string, labe
     if (kind === "ambiguous") return `Mentions ${p}, whose source is not stated. You keep kosher; check with the certifier.`;
     return `Mentions ${p}. You keep kosher.`;
   }
+  if (profile === "vegan") {
+    if (kind === "undeclared") return `Undeclared ${p}, an animal-derived ingredient. You eat vegan.`;
+    if (kind === "ambiguous") return `Mentions ${p}, which can be animal- or plant-derived. You eat vegan; check the label or ask the maker.`;
+    return `Mentions ${p}, an animal-derived ingredient. You eat vegan.`;
+  }
   if (profile === "gluten_free") {
     if (kind === "undeclared") return `Undeclared ${p}, a source of gluten. You avoid gluten.`;
     if (kind === "ambiguous") return `Mentions ${p}, which may contain gluten. You avoid gluten; check the package.`;
@@ -217,7 +222,7 @@ export function matchRecallForDiet(recall: RecallFields, sel: DietSelection): { 
         score = inReason ? 0.4 : 0.3;
       } else if (inReason) {
         score = allergy ? 0.8 : 0.75;
-      } else if (allergy) {
+      } else if (isAvoidanceProfile(entry.profile)) {
         // Named in the product, not the reason. Only matters when the recall is about labeling.
         if (!allergenRecall) continue;
         score = 0.6;
@@ -251,7 +256,7 @@ export function dietHitsForLabel(text: string, sel: DietSelection, field = "labe
   for (const entry of entriesFor(sel)) {
     for (const h of scanText(text, entry, field)) {
       // "Natural flavors" is on almost every label; as a maybe-allergen it would flag everything.
-      // Halal and kosher users do want to know about unspecified gelatin, flavors and enzymes.
+      // Halal, kosher and vegan users do want to know about unspecified gelatin, flavors and enzymes.
       if (h.kind === "ambiguous" && isAllergyProfile(entry.profile)) continue;
       out.push({ profile: h.profile, label: entry.label, kind: h.kind, term: h.term, phrase: h.phrase, field, explanation: explain(entry.profile, h.kind, h.phrase, entry.label, entry.noun) });
     }

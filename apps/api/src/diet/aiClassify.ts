@@ -22,13 +22,13 @@ const Classification = z.object({
 });
 
 const SOURCE_TO_PROFILE: Record<z.infer<typeof Source>, DietProfile[]> = {
-  pork: ["halal", "kosher"],
-  other_animal: ["halal", "kosher"],
+  pork: ["halal", "kosher", "vegan"],
+  other_animal: ["halal", "kosher", "vegan"],
   alcohol: ["halal"],
-  milk: ["allergy_milk"],
-  egg: ["allergy_egg"],
-  fish: ["allergy_fish"],
-  shellfish: ["allergy_shellfish", "kosher"],
+  milk: ["allergy_milk", "vegan"],
+  egg: ["allergy_egg", "vegan"],
+  fish: ["allergy_fish", "vegan"],
+  shellfish: ["allergy_shellfish", "kosher", "vegan"],
   tree_nut: ["allergy_tree_nut"],
   peanut: ["allergy_peanut"],
   wheat_gluten: ["allergy_wheat", "gluten_free"],

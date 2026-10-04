@@ -21,7 +21,8 @@ describe("dietary dictionary", () => {
     expect(entryFor("gluten_free").terms).toEqual(expect.arrayContaining(["barley", "rye", "malt", "brewer's yeast"]));
     expect(entryFor("halal").terms).toEqual(expect.arrayContaining(["pork gelatin", "lard", "carmine", "alcohol", "pepsin"]));
     expect(entryFor("kosher").terms).toEqual(expect.arrayContaining(["pork", "shrimp", "lard"]));
-    expect(ENTRIES.map((e) => e.profile)).toHaveLength(12);
+    expect(entryFor("vegan").terms).toEqual(expect.arrayContaining(["gelatin", "honey", "whey", "carmine", "chicken", "isinglass"]));
+    expect(ENTRIES.map((e) => e.profile)).toHaveLength(13);
   });
 
   it("matches on word boundaries, case-insensitively, with plurals", () => {
@@ -102,6 +103,22 @@ describe("recall matching for a dietary profile", () => {
     const treif = matchRecallForDiet(recall({ title: "Sea Co: Cooked Shrimp", productDescription: "Cooked shrimp 1 lb", reason: "Listeria" }), { dietProfiles: ["kosher"], otherAllergens: [] });
     expect(treif.best).toMatchObject({ profile: "kosher", kind: "mention", term: "shrimp" });
     expect(treif.best!.score).toBe(0.5);
+  });
+
+  it("flags animal-derived ingredients for a vegan user, but not a plainly animal product recalled for another reason", () => {
+    const vegan = { dietProfiles: ["vegan"], otherAllergens: [] };
+    const egg = matchRecallForDiet(recall({ title: "Green Fields: Plant-Based Mayo", productDescription: "Plant-Based Mayo 12 oz", reason: "Undeclared egg: jars labeled vegan contain egg-based mayonnaise." }), vegan);
+    expect(egg.best).toMatchObject({ profile: "vegan", kind: "undeclared" });
+    expect(egg.best!.explanation).toBe("Undeclared egg, an animal-derived ingredient. You eat vegan.");
+    expect(egg.best!.minSeverity).toBeNull(); // not an allergy: no severity floor
+    const honey = matchRecallForDiet(recall({ reason: "Product contains honey not listed on the label." }), vegan);
+    expect(honey.best).toMatchObject({ profile: "vegan", term: "honey", kind: "undeclared" });
+    // A chicken recall for Listeria is not news to someone who never buys chicken.
+    expect(matchRecallForDiet(recall({ title: "Farm Co: Chicken Breast", productDescription: "Boneless chicken breast 1 lb", reason: "Listeria" }), vegan).best).toBeNull();
+    // Negation respected; ambiguous words shown as such on labels.
+    expect(matchRecallForDiet(recall({ reason: "Certified vegan, contains no dairy or egg; recalled for metal fragments." }), vegan).best).toBeNull();
+    const label = dietHitsForLabel("INGREDIENTS: SUGAR, GLYCERIN, NATURAL FLAVORS, CARMINE", vegan);
+    expect(label.map((h) => [h.term, h.kind])).toEqual([["carmine", "mention"]]);
   });
 
   it("picks the strongest hit when several profiles fire", () => {

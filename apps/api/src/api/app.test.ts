@@ -441,7 +441,7 @@ describe("HTTP API (integration)", () => {
     expect((await app.inject({ method: "GET", url: "/v1/me", headers: dietAuth })).json().preferences.timezone).toBe("America/Chicago");
 
     // Validation: unknown profile, junk allergen text.
-    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["vegan"] } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["paleo"] } })).statusCode).toBe(400);
     expect((await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { otherAllergens: ["<script>"] } })).statusCode).toBe(400);
 
     // Turning on a milk allergy backfills the undeclared-milk recall already in the database.

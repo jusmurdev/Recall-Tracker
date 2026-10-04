@@ -17,7 +17,7 @@
  */
 import type { DietProfile } from "@recall/shared";
 
-export const DICTIONARY_VERSION = 1;
+export const DICTIONARY_VERSION = 2;
 
 export interface DictionaryEntry {
   profile: DietProfile;
@@ -46,6 +46,21 @@ const HARAM_AMBIGUOUS = ["gelatin", "gelatine", "natural flavors", "natural flav
 const TREIF = ["pork", "pig", "porcine", "swine", "hog", "bacon", "ham", "lard", "pork gelatin", "porcine gelatin", "pancetta", "prosciutto", "pepperoni", "pork sausage", "shellfish", "shrimp", "prawn", "crab", "lobster", "crawfish", "crayfish", "clam", "oyster", "mussel", "scallop", "squid", "calamari", "octopus", "escargot", "snail", "catfish", "eel", "shark", "swordfish", "sturgeon", "rabbit", "horse meat", "non-kosher", "not kosher", "treif", "treyf"] as const;
 const TREIF_AMBIGUOUS = ["gelatin", "gelatine", "rennet", "enzymes", "natural flavors", "natural flavor", "glycerin", "glycerol", "mono- and diglycerides", "carmine", "cochineal", "wine", "grape juice", "l-cysteine"] as const;
 
+/** Animal-derived ingredients named in recall text or on a label. */
+const ANIMAL = [
+  // meat and poultry
+  "meat", "beef", "pork", "pig", "porcine", "swine", "bacon", "ham", "lard", "tallow", "suet", "veal", "lamb", "mutton", "goat", "venison", "bison", "chicken", "turkey", "duck", "goose", "poultry", "sausage", "pepperoni", "salami", "chorizo", "prosciutto", "pancetta", "hot dog", "hot dogs", "jerky", "bone broth", "beef broth", "chicken broth", "chicken stock", "beef stock", "meat extract", "bone char", "bone phosphate", "animal fat", "animal shortening", "animal rennet", "rennet", "pepsin", "lipase", "gelatin", "gelatine", "collagen", "isinglass", "l-cysteine",
+  // fish and seafood
+  "fish", "anchovy", "anchovies", "fish sauce", "fish oil", "cod liver oil", "omega-3 from fish", "salmon", "tuna", "shrimp", "prawn", "crab", "lobster", "clam", "oyster", "oyster sauce", "mussel", "scallop", "squid", "octopus", "caviar", "roe", "surimi", "worcestershire sauce",
+  // dairy
+  "milk", "dairy", "casein", "caseinate", "whey", "lactose", "lactalbumin", "lactoglobulin", "ghee", "butter", "buttermilk", "butterfat", "cream", "cheese", "yogurt", "yoghurt", "curd", "custard", "kefir", "paneer", "milk solids", "milk powder", "milk protein", "sour cream", "cream cheese", "ice cream", "condensed milk", "evaporated milk", "nonfat dry milk",
+  // egg
+  "egg", "albumin", "albumen", "ovalbumin", "ovomucoid", "lysozyme", "mayonnaise", "meringue", "egg white", "egg yolk", "egg wash", "dried egg", "egg powder",
+  // other animal products
+  "honey", "beeswax", "royal jelly", "propolis", "bee pollen", "lanolin", "shellac", "confectioner's glaze", "confectioners glaze", "resinous glaze", "carmine", "cochineal", "carminic acid", "natural red 4", "e120", "e904", "e441", "e542", "e901", "e913", "castoreum", "ambergris", "musk", "squalene", "keratin", "elastin", "chitosan", "glucosamine", "non-vegan", "not vegan", "contains animal",
+] as const;
+const ANIMAL_AMBIGUOUS = ["natural flavors", "natural flavor", "natural flavoring", "natural flavourings", "glycerin", "glycerol", "mono- and diglycerides", "monoglycerides", "diglycerides", "stearic acid", "magnesium stearate", "calcium stearate", "vitamin d3", "cholecalciferol", "vitamin d", "lecithin", "enzymes", "sugar", "refined sugar", "brown sugar", "wine", "beer", "omega-3", "omega 3", "dha", "lactic acid", "oleic acid", "e471", "e472", "e322", "e570", "e631", "e635", "capsules", "softgels", "shortening"] as const;
+
 export const ENTRIES: readonly DictionaryEntry[] = [
   { profile: "allergy_milk", noun: "milk", terms: MILK, ambiguous: ["natural flavors", "natural flavor", "caramel color", "lactic acid starter culture", "brown sugar flavoring", "high protein flour", "margarine"] },
   { profile: "allergy_egg", noun: "egg", terms: EGG, ambiguous: ["lecithin", "natural flavors", "natural flavor", "pasta", "baked goods", "glaze"] },
@@ -59,6 +74,7 @@ export const ENTRIES: readonly DictionaryEntry[] = [
   { profile: "gluten_free", noun: "gluten", terms: GLUTEN, ambiguous: ["oats", "oat", "oatmeal", "flour", "starch", "modified food starch", "natural flavors", "natural flavor", "soy sauce", "dextrin", "maltodextrin", "yeast extract", "hydrolyzed vegetable protein"] },
   { profile: "halal", noun: "a haram ingredient", terms: HARAM, ambiguous: HARAM_AMBIGUOUS },
   { profile: "kosher", noun: "a non-kosher ingredient", terms: TREIF, ambiguous: TREIF_AMBIGUOUS },
+  { profile: "vegan", noun: "an animal-derived ingredient", terms: ANIMAL, ambiguous: ANIMAL_AMBIGUOUS },
 ];
 
 /** Kosher certifiers and marks; a recall that names one concerns a kosher-certified product. */
@@ -116,3 +132,8 @@ export function entryFor(profile: DietProfile): DictionaryEntry {
 
 export const ALLERGY_PROFILES = new Set<DietProfile>(["allergy_milk", "allergy_egg", "allergy_fish", "allergy_shellfish", "allergy_tree_nut", "allergy_peanut", "allergy_wheat", "allergy_soy", "allergy_sesame"]);
 export const isAllergyProfile = (p: string): boolean => ALLERGY_PROFILES.has(p as DietProfile) || p === "allergy_other" || p === "gluten_free";
+/**
+ * Profiles that avoid whole classes of products. A recall of "Chicken Breast" is not news to a
+ * vegan: like allergens, the product's own name only matters when the recall is about labeling.
+ */
+export const isAvoidanceProfile = (p: string): boolean => isAllergyProfile(p) || p === "vegan";

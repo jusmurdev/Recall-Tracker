@@ -20,6 +20,7 @@ export const DIET_TOGGLES: Array<{ profile: DietProfile; label: string; descript
   { profile: "gluten_free", label: "Gluten-free", description: "Wheat, barley, rye, malt and hidden sources like semolina or brewer's yeast." },
   { profile: "halal", label: "Halal diet", description: "Flags haram ingredients named in a recall or on a label: pork and pork derivatives, alcohol, non-halal gelatin, carmine." },
   { profile: "kosher", label: "Kosher", description: "Flags pork, shellfish, meat-and-dairy mixing, and recalls of kosher-certified products." },
+  { profile: "vegan", label: "Vegan", description: "Flags animal-derived ingredients named in a recall or on a label: meat, fish, dairy, egg, honey, gelatin, carmine and hidden sources." },
 ];
 
 export const EMPTY_DIET: DietPreferences = { dietProfiles: [], otherAllergens: [] };
@@ -70,6 +71,7 @@ export function profilePhrase(profile: string | null | undefined, explanation?: 
   const l = profileLabel(profile);
   if (l === "Kosher") return "kosher diet";
   if (l === "Gluten-free") return "gluten-free diet";
+  if (l === "Vegan") return "vegan diet";
   return l.charAt(0).toLowerCase() + l.slice(1);
 }
 

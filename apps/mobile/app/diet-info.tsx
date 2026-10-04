@@ -42,6 +42,11 @@ export default function DietInfoScreen() {
         </Card>
 
         <Card>
+          <Subtitle>Vegan</Subtitle>
+          <Body>We flag animal-derived ingredients a notice or label names: meat, fish, dairy, egg, honey, gelatin, carmine, isinglass and similar. Sugar, glycerin, vitamin D3 and "natural flavors" can be either, so they appear as "might contain". Nothing here certifies a product as vegan.</Body>
+        </Card>
+
+        <Card>
           <Subtitle>Your privacy</Subtitle>
           <Body>Your selections are stored as a plain list on your account, used only to match recalls, and deleted with your account. They are never written to logs or analytics and never sent to an AI provider. The optional premium check of ambiguous ingredients sends the label text only.</Body>
         </Card>
