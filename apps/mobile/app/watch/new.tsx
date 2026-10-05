@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
 import { ScrollView, View } from "react-native";
-import { Body, Button, Card, Collapsible, Empty, Input, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
+import { Body, Button, Card, Collapsible, Empty, Hint, Input, RecallRow, Screen, Small, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
 import { useBottomPad } from "@/hooks/useBottomPad";
 import { whyAlert } from "@/lib/friendly";
@@ -27,18 +27,19 @@ export default function NewWatchItem() {
 
   const matches = create.data?.matches ?? [];
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         {!create.data ? (
           <>
             <Card>
               <Subtitle>What do you buy?</Subtitle>
-              <Input placeholder="e.g. Jif peanut butter, Similac formula" value={what} onChangeText={setWhat} autoFocus />
-              <Small>A brand name is enough. We'll match any recall that mentions it.</Small>
+              <Input placeholder="Brand or product" value={what} onChangeText={setWhat} autoFocus />
+              <Hint>e.g. Jif peanut butter, Similac formula. A brand name is enough.</Hint>
               <Collapsible title="Add a barcode or a note (optional)">
                 <View style={{ gap: 10 }}>
                   <Input placeholder="Barcode number" value={upc} onChangeText={setUpc} keyboardType="number-pad" />
-                  <Input placeholder="Note to self: bought at Costco, for the baby…" value={context} onChangeText={setContext} />
+                  <Input placeholder="Note (optional)" value={context} onChangeText={setContext} />
+                  <Hint>e.g. bought at Costco, for the baby</Hint>
                 </View>
               </Collapsible>
               <Button title="Watch it" loading={create.isPending} disabled={!what.trim() && !upc.trim()} onPress={submit} />

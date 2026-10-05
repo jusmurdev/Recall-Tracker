@@ -44,7 +44,7 @@ try {
   const typeIn = page.getByText("Type it in instead").first();
   if (await typeIn.isVisible().catch(() => false)) await typeIn.click();
   await page.waitForTimeout(500);
-  await page.getByPlaceholder(/Brand and product/).fill("Zappo Crunch Bar\nINGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR");
+  await page.getByPlaceholder("Product name").fill("Zappo Crunch Bar\nINGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR");
   await page.getByText("Check it").first().click();
   await page.waitForTimeout(2500);
   await shot("25-scan-diet-heads-up");

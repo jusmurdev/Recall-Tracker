@@ -25,7 +25,7 @@ export default function ConnectorsScreen() {
 
   if (!premium) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Empty title="Premium required" body="Connected accounts import your purchase history through MCP so recalls match what you actually buy." />
       </Screen>
     );
@@ -47,7 +47,7 @@ export default function ConnectorsScreen() {
   };
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         <Card>
           <Subtitle>Connect a shopping account</Subtitle>
@@ -58,7 +58,7 @@ export default function ConnectorsScreen() {
             ))}
           </ScrollView>
           <Input placeholder="Display name (optional)" value={name} onChangeText={setName} />
-          <Input placeholder="Connection link (https://…)" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
+          <Input placeholder="Connection link" value={url} onChangeText={setUrl} autoCapitalize="none" keyboardType="url" />
           <Input placeholder="Access code (kept encrypted)" value={token} onChangeText={setToken} autoCapitalize="none" secureTextEntry />
           <Button title="Connect" loading={saving} disabled={!/^https:\/\//.test(url.trim())} onPress={() => void add()} />
         </Card>

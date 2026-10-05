@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { ScrollView, StyleSheet } from "react-native";
 import type { CatalogRestaurant, NearbyRestaurant, RestaurantLookup } from "@recall/shared";
 import { Pressable, Text, View } from "react-native";
-import { Body, Button, Card, GradeBadge, Input, PremiumTag, Screen, Subtitle } from "@/components/ui";
+import { Body, Button, Card, GradeBadge, Hint, Input, PremiumTag, Screen, Subtitle } from "@/components/ui";
 import { useCreateWatchItem } from "@/hooks/queries";
 import { useBottomPad } from "@/hooks/useBottomPad";
 import { useLocationState } from "@/hooks/useLocationState";
@@ -120,7 +120,7 @@ export default function NewRestaurant() {
   };
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }} keyboardShouldPersistTaps="handled">
         <Card>
           <Subtitle>Which restaurant?</Subtitle>
@@ -174,8 +174,9 @@ export default function NewRestaurant() {
           ) : null}
           <Input placeholder="City" value={city} onChangeText={setCity} />
           <Input placeholder="State (e.g. TX)" value={state} onChangeText={setState} autoCapitalize="characters" maxLength={2} />
-          <Input placeholder="Website (optional)" value={website} onChangeText={setWebsite} autoCapitalize="none" keyboardType="url" />
-          <Input placeholder="Notes (optional): going Friday, kids' birthday…" value={context} onChangeText={setContext} />
+          <Input placeholder="Website" value={website} onChangeText={setWebsite} autoCapitalize="none" keyboardType="url" />
+          <Input placeholder="Notes (optional)" value={context} onChangeText={setContext} />
+          <Hint>e.g. going Friday, kids' birthday</Hint>
           {picked ? null : lookup?.known && lookup.fresh ? (
             <Body style={{ color: colors.accent }}>
               Already researched{lookup.trackedBy ? ` · tracked by ${lookup.trackedBy} ${lookup.trackedBy === 1 ? "person" : "people"}` : ""}. Results appear instantly.

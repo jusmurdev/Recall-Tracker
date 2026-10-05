@@ -12,7 +12,7 @@ import { colors, spacing } from "@/lib/theme";
 export default function DietInfoScreen() {
   const bottomPad = useBottomPad();
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 6 }}>
           <Title>About diet alerts</Title>

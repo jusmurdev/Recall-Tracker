@@ -22,7 +22,7 @@ export default function WatchItemDetail() {
 
   if (!item) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
@@ -35,7 +35,7 @@ export default function WatchItemDetail() {
     ]);
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <Stack.Screen options={{ title: "" }} />
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <Title>{item.label}</Title>

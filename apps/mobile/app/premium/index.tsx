@@ -19,7 +19,7 @@ export default function PremiumScreen() {
   const premium = me.data?.tier === "premium";
   const bottomPad = useBottomPad();
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 8 }}>
           <PremiumTag />

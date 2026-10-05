@@ -2,15 +2,28 @@ import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View, type PressableProps, type StyleProp, type TextInputProps, type ViewProps, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Recall, RecallSeverity, RestaurantGrade } from "@recall/shared";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, severityColor, severitySoft, spacing } from "@/lib/theme";
 import { CATEGORY_EMOJI, SEVERITY, headline, plainReason, relativeDay } from "@/lib/friendly";
 
-export function Screen({ children, style, ...rest }: ViewProps) {
+/**
+ * Full-height screen background. Stack screens (anything not inside the tab bar) pass
+ * `edges={["bottom"]}` so their content never sits under the Android navigation bar; tab screens
+ * leave it out because the tab bar already covers that inset.
+ */
+export function Screen({ children, style, edges, ...rest }: ViewProps & { edges?: Array<"bottom"> }) {
+  const insets = useSafeAreaInsets();
+  const bottom = edges?.includes("bottom") ? insets.bottom : 0;
   return (
-    <View style={[styles.screen, style]} {...rest}>
+    <View style={[styles.screen, bottom ? { paddingBottom: bottom } : null, style]} {...rest}>
       {children}
     </View>
   );
+}
+
+/** Helper line under an input: the examples that used to crowd the placeholder. */
+export function Hint({ children }: { children: React.ReactNode }) {
+  return <Text style={[styles.small, { marginTop: -6 }]}>{children}</Text>;
 }
 
 export function Card({ children, style, tone, ...rest }: ViewProps & { tone?: "default" | "soft" | "accent" | "critical" | "high" | "low" | "success" | "premium" }) {
@@ -83,11 +96,19 @@ export function Button({
   );
 }
 
-export function Input(props: TextInputProps) {
+/**
+ * Text field. Single-line by default: one line of text, a minimum height that fits it, symmetric
+ * padding and no Android font padding, so placeholders never clip. Pass `multiline` for a
+ * multi-line box; it grows from three lines and aligns text to the top.
+ */
+export const Input = React.forwardRef<TextInput, TextInputProps>(function Input(props, ref) {
   const [focused, setFocused] = useState(false);
   return (
     <TextInput
+      ref={ref}
       placeholderTextColor={colors.muted}
+      numberOfLines={props.multiline ? undefined : 1}
+      textAlignVertical={props.multiline ? "top" : "center"}
       {...props}
       onFocus={(e) => {
         setFocused(true);
@@ -97,10 +118,10 @@ export function Input(props: TextInputProps) {
         setFocused(false);
         props.onBlur?.(e);
       }}
-      style={[styles.input, focused && styles.inputFocused, props.style]}
+      style={[styles.input, props.multiline && styles.inputMultiline, focused && styles.inputFocused, props.style]}
     />
   );
-}
+});
 
 /** Friendly severity chip: "Serious" / "Moderate" / "Minor" with a dot, no class numbers. */
 export function SeverityChip({ severity, size = "sm" }: { severity: RecallSeverity; size?: "sm" | "lg" }) {
@@ -282,7 +303,8 @@ const styles = StyleSheet.create({
   secondary: { borderColor: "rgba(31,138,128,0.35)" },
   filledEdge: { borderColor: "rgba(0,0,0,0.08)" },
   buttonText: { fontWeight: "700", fontSize: 16 },
-  input: { backgroundColor: colors.card, color: colors.text, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, borderWidth: 1.5, borderColor: colors.border, outlineWidth: 0 },
+  input: { backgroundColor: colors.card, color: colors.text, borderRadius: radius.md, paddingHorizontal: 16, paddingVertical: 12, minHeight: 52, fontSize: 16, lineHeight: 22, includeFontPadding: false, borderWidth: 1.5, borderColor: colors.border, outlineWidth: 0 },
+  inputMultiline: { minHeight: 52 + 22 * 2, paddingTop: 12, paddingBottom: 12 },
   inputFocused: { borderColor: colors.accent },
   chip: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4 },
   chipText: { fontSize: 12, fontWeight: "700" },

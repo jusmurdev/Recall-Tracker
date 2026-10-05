@@ -19,7 +19,7 @@ export default function RestaurantUpdates() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updates.data?.unread]);
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <FlatList
         data={updates.data?.items ?? []}
         keyExtractor={(n) => n.id}

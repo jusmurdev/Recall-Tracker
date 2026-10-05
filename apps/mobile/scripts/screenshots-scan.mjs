@@ -24,7 +24,7 @@ await shot("03b-scan-product-result");
 // Back, switch to receipt
 await page.getByRole("button", { name: "Scan another" }).click();
 await page.waitForTimeout(500);
-await page.getByRole("button", { name: "A receipt" }).click();
+await page.getByRole("button", { name: "Check a receipt" }).click();
 await page.waitForTimeout(400);
 await shot("03c-scan-receipt-start");
 await page.getByPlaceholder(/One item per line/).fill("KROGER\n10/02/2026\nJIF CRMY PNT BTR 16Z 3.49 F\nBOARS HEAD LVRWRST 6.99 F\nBNNA ORG 2.58 F\nKRGR WHL MLK GAL 3.19 F\nSTANLEY TRVL MUG 12OZ 24.99 T\nSUBTOTAL 41.24");

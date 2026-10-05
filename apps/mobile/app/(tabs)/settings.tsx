@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
-import { Alert as RNAlert, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Alert as RNAlert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { type RecallCategory, type RecallSeverity } from "@recall/shared";
 import { api } from "@/api/client";
-import { Body, Button, Card, Collapsible, Input, Pill, PremiumTag, Screen, Small, Subtitle, SwitchRow, Title } from "@/components/ui";
+import { Body, Button, Card, Collapsible, Hint, Input, Pill, PremiumTag, Screen, Small, Subtitle, SwitchRow, Title } from "@/components/ui";
 import { ALLERGY_PROFILES, DIET_TOGGLES, EMPTY_DIET, addOtherAllergen, removeOtherAllergen, toggleProfile } from "@/lib/diet";
 import { deviceTimezone } from "@/hooks/useTimezoneSync";
 import { usePushStatus } from "@/lib/pushStatus";
@@ -42,10 +42,26 @@ export default function SettingsScreen() {
   const [otherAllergen, setOtherAllergen] = useState("");
   const [allergenError, setAllergenError] = useState<string | null>(null);
   const [dietNote, setDietNote] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const allergenRef = useRef<TextInput>(null);
+  const scrollY = useRef(0);
+  // The allergen box sits mid-page; when the keyboard opens, bring it (and the Add button) into view.
+  const revealAllergenInput = () => {
+    setTimeout(() => {
+      allergenRef.current?.measureInWindow((_x, y, _w, h) => {
+        const visibleBottom = 280; // roughly the top of a soft keyboard on a 2340px-tall phone, in points
+        if (y + h > visibleBottom) scrollRef.current?.scrollTo({ y: scrollY.current + (y + h - visibleBottom) + 24, animated: true });
+      });
+    }, 250);
+  };
   const saveDiet = (next: typeof diet) =>
     update.mutate(next, {
       onSuccess: (res) => {
-        if (res.dietAlertsAdded > 0) setDietNote(`${res.dietAlertsAdded} recall${res.dietAlertsAdded === 1 ? "" : "s"} from the last few weeks match. See Alerts.`);
+        const n = res.dietAlertsMatching ?? 0;
+        const anyOn = next.dietProfiles.length > 0 || next.otherAllergens.length > 0;
+        if (!anyOn) setDietNote(null);
+        else if (n > 0) setDietNote(`${n} recent recall${n === 1 ? "" : "s"} match${n === 1 ? "es" : ""} your profile. See the Alerts tab.`);
+        else setDietNote("No current recall matches your profile. We'll tell you when one does.");
       },
     });
   const addAllergen = () => {
@@ -99,7 +115,8 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
       <Screen>
-        <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(6) }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 24}>
+        <ScrollView ref={scrollRef} onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)} scrollEventThrottle={100} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: spacing(6) }}>
           <Title>You</Title>
 
           <Pressable onPress={() => router.push(premium ? "/premium/connectors" : "/premium")} accessibilityRole="button">
@@ -129,6 +146,14 @@ export default function SettingsScreen() {
           <Card>
             <Subtitle>Diet and allergies</Subtitle>
             <Small>Get told when a recall mentions something you avoid, even if you never added the product. Scans get a heads-up too.</Small>
+            {/* Right under the intro, so it is on screen where the user just tapped. */}
+            {dietNote ? (
+              <View style={styles.notice} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                <Ionicons name="information-circle-outline" size={18} color={colors.high} />
+                <Small style={{ flex: 1, color: colors.text }}>{dietNote}</Small>
+                {dietNote.includes("Alerts") ? <Button title="Open" variant="ghost" onPress={() => router.push("/alerts")} style={{ minHeight: 40, paddingVertical: 6, paddingHorizontal: 14, flexShrink: 0 }} /> : null}
+              </View>
+            ) : null}
             {me.data ? (
               <>
                 <Small>Allergies</Small>
@@ -140,20 +165,16 @@ export default function SettingsScreen() {
                     <Pill key={w} label={`✕ ${w}`} active onPress={() => saveDiet(removeOtherAllergen(diet, w))} />
                   ))}
                 </View>
-                <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                  <Input placeholder="Another allergen, e.g. mustard" value={otherAllergen} onChangeText={setOtherAllergen} onSubmitEditing={addAllergen} returnKeyType="done" autoCapitalize="none" style={{ flex: 1 }} />
-                  <Button title="Add" variant="secondary" disabled={otherAllergen.trim().length < 2} onPress={addAllergen} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+                  {/* The field keeps room for its placeholder; on narrow screens or large text the Add button wraps below it. */}
+                  <Input ref={allergenRef} placeholder="Other allergen" value={otherAllergen} onChangeText={setOtherAllergen} onSubmitEditing={addAllergen} onFocus={revealAllergenInput} returnKeyType="done" autoCapitalize="none" style={{ flexGrow: 1, flexBasis: 200, minWidth: 0 }} />
+                  <Button title="Add" variant="secondary" disabled={otherAllergen.trim().length < 2} onPress={addAllergen} style={{ flexShrink: 0, paddingHorizontal: 16 }} />
                 </View>
+                <Hint>Add one we don't list, e.g. mustard, lupin, celery</Hint>
                 {allergenError ? <Small style={{ color: colors.critical }}>{allergenError}</Small> : null}
                 {DIET_TOGGLES.map((t) => (
                   <SwitchRow key={t.profile} label={t.label} description={t.description} value={diet.dietProfiles.includes(t.profile)} onValueChange={() => saveDiet(toggleProfile(diet, t.profile))} />
                 ))}
-                {dietNote ? (
-                  <View style={styles.notice}>
-                    <Ionicons name="information-circle-outline" size={18} color={colors.high} />
-                    <Small style={{ flex: 1, color: colors.text }}>{dietNote}</Small>
-                  </View>
-                ) : null}
                 <Small>Matches come from the words in recall notices and labels. They can miss things and never say a product is halal or kosher. Always check the package.</Small>
                 <Button title="About diet alerts" variant="ghost" icon="help-circle-outline" onPress={() => router.push("/diet-info")} />
               </>
@@ -260,6 +281,7 @@ export default function SettingsScreen() {
             </Collapsible>
           </Card>
         </ScrollView>
+        </KeyboardAvoidingView>
       </Screen>
     </SafeAreaView>
   );

@@ -25,7 +25,7 @@ export default function Subscribe() {
   const label = `${SEV.find((s) => s.v === min)!.label}: ${cats.map((c) => CATEGORY_FRIENDLY[c]).join(", ")}`;
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         {!create.data ? (
           <>

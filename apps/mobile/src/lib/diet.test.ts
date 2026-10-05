@@ -49,6 +49,11 @@ describe("diet copy", () => {
     expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "allergy_other", explanation: "Undeclared mustard. You listed mustard allergy." }])).toBe("1 recall matches your mustard allergy");
     expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "vegan", explanation: "" }])).toBe("1 recall matches your vegan diet");
     expect(dietHeadline([{ ...base, reason: "diet_match", dietProfile: "allergy_peanut", explanation: "", resolvedAt: "2026-01-01T00:00:00Z" }])).toBeNull();
+    // Profile emptied: old diet alerts are history, not a headline.
+    const peanut = { ...base, reason: "diet_match" as const, dietProfile: "allergy_peanut", explanation: "" };
+    expect(dietHeadline([peanut], EMPTY_DIET)).toBeNull();
+    expect(dietHeadline([peanut], null)).toBeNull();
+    expect(dietHeadline([peanut], { dietProfiles: ["allergy_peanut"], otherAllergens: [] })).toBe("1 recall matches your peanut allergy");
   });
 
   it("highlights the matched phrase and excerpts long text", () => {

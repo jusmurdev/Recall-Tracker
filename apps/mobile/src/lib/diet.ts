@@ -76,7 +76,9 @@ export function profilePhrase(profile: string | null | undefined, explanation?: 
 }
 
 /** Home lead line when diet alerts are open: "1 recall matches your peanut allergy". */
-export function dietHeadline(alerts: Array<Pick<Alert, "reason" | "dietProfile" | "explanation" | "resolvedAt" | "dismissedAt">>): string | null {
+export function dietHeadline(alerts: Array<Pick<Alert, "reason" | "dietProfile" | "explanation" | "resolvedAt" | "dismissedAt">>, diet?: Partial<DietPreferences> | null): string | null {
+  // Old diet alerts stay in the inbox as history, but Home only leads with them while a profile is on.
+  if (diet !== undefined && !hasDiet(diet)) return null;
   const open = alerts.filter((a) => a.reason === "diet_match" && !a.resolvedAt && !a.dismissedAt);
   if (!open.length) return null;
   const phrases = [...new Set(open.map((a) => profilePhrase(a.dietProfile, a.explanation)))];

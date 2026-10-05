@@ -14,13 +14,13 @@ export default function ReceiptDetail() {
   const bottomPad = useBottomPad();
   if (!q.data) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
   }
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <ReceiptResults result={q.data} />
       </ScrollView>

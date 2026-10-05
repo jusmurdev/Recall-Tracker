@@ -8,7 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReceiptScanResponse, ScanMatchResponse } from "@recall/shared";
 import { api, ApiError } from "@/api/client";
-import { Body, Button, Card, Empty, Input, PremiumTag, RecallRow, Screen, Small, Subtitle, SwitchRow } from "@/components/ui";
+import { Body, Button, Card, Empty, Hint, Input, PremiumTag, RecallRow, Screen, Small, Subtitle, SwitchRow } from "@/components/ui";
 import { useMe, useScanMatch, useScanReceipt } from "@/hooks/queries";
 import { barcodesInPhoto, recognizeText } from "@/lib/ocr";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -34,7 +34,8 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState<{ uri: string; base64?: string } | null>(null);
-  const [watch, setWatch] = useState(true);
+  // Off by default: a checked product is not necessarily one you own.
+  const [watch, setWatch] = useState(false);
   const [productResult, setProductResult] = useState<ScanMatchResponse | null>(null);
   const [receiptResult, setReceiptResult] = useState<ReceiptScanResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -201,13 +202,14 @@ export default function ScanScreen() {
             <Card>
               <Subtitle>{target === "receipt" ? "Or type what's on the receipt" : "Or type it in"}</Subtitle>
               <Input
-                multiline
-                placeholder={target === "receipt" ? "One item per line, e.g.\nJIF CRMY PNT BTR 16Z\nBOARS HEAD LVRWRST" : "Brand and product, e.g. Jif creamy peanut butter"}
+                multiline={target === "receipt"}
+                placeholder={target === "receipt" ? "One item per line" : "Product name"}
                 value={text}
                 onChangeText={setText}
-                style={{ minHeight: target === "receipt" ? 140 : 70 }}
+                style={target === "receipt" ? { minHeight: 140 } : undefined}
                 autoCapitalize="characters"
               />
+              <Hint>{target === "receipt" ? "e.g. JIF CRMY PNT BTR 16Z" : "Brand and product, e.g. Jif creamy peanut butter"}</Hint>
               <SwitchRow label={target === "receipt" ? "Keep an eye on all of these" : "Keep an eye on this for me"} value={watch} onValueChange={setWatch} />
               <Button title={busy ?? "Check it"} icon="search" loading={!!busy} disabled={text.trim().length < 2} onPress={() => (target === "receipt" ? void checkReceipt({ ocrText: text }) : void checkProduct({ ocrText: text }))} />
               {error ? <Body style={{ color: colors.critical }}>{error}</Body> : null}
@@ -244,9 +246,9 @@ function TargetSwitch({ target, onChange, onDark }: { target: Target; onChange: 
       {(["product", "receipt"] as Target[]).map((t) => {
         const on = target === t;
         return (
-          <Pressable key={t} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onChange(t)} style={[styles.segmentItem, on && styles.segmentOn]}>
+          <Pressable key={t} accessibilityRole="button" accessibilityLabel={t === "product" ? "Check a product" : "Check a receipt"} accessibilityState={{ selected: on }} onPress={() => onChange(t)} style={[styles.segmentItem, on && styles.segmentOn]}>
             <Ionicons name={t === "product" ? "cube-outline" : "receipt-outline"} size={16} color={on ? colors.accent : onDark ? "#fff" : colors.muted} />
-            <Text style={[styles.segmentText, on ? { color: colors.accent } : onDark ? { color: "#fff" } : null]}>{t === "product" ? "A product" : "A receipt"}</Text>
+            <Text numberOfLines={1} style={[styles.segmentText, on ? { color: colors.accent } : onDark ? { color: "#fff" } : null]}>{t === "product" ? "Product" : "Receipt"}</Text>
           </Pressable>
         );
       })}
@@ -258,8 +260,8 @@ const styles = StyleSheet.create({
   heroRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   switchRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   topBar: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "center", paddingTop: 8 },
-  segment: { flexDirection: "row", backgroundColor: colors.cardAlt, borderRadius: radius.pill, padding: 4, alignSelf: "center" },
-  segmentItem: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 16, borderRadius: radius.pill },
+  segment: { flexDirection: "row", backgroundColor: colors.cardAlt, borderRadius: radius.pill, padding: 4, alignSelf: "center", maxWidth: "100%" },
+  segmentItem: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.pill, flexShrink: 1 },
   segmentOn: { backgroundColor: colors.card },
   segmentText: { fontWeight: "700", color: colors.muted, fontSize: 14 },
   frameWrap: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" },

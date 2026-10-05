@@ -19,7 +19,7 @@ export default function RecallDetail() {
   const bottomPad = useBottomPad();
   if (q.isLoading || !q.data) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
@@ -30,7 +30,7 @@ export default function RecallDetail() {
   const steps = (r.remedy ?? "").split(/(?<=[.!])\s+/).map((s) => s.trim()).filter((s) => s.length > 8).slice(0, 4);
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <Stack.Screen options={{ headerRight: () => <Ionicons name="share-outline" size={22} color={colors.text} onPress={share} accessibilityLabel="Share this recall" /> }} />
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 10 }}>

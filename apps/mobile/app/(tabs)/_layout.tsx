@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import React from "react";
+import { Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAlerts } from "@/hooks/queries";
 import { colors } from "@/lib/theme";
@@ -17,7 +18,13 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border, height: 58 + bottom, paddingTop: 6, paddingBottom: bottom },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        // Five labels share the width: let them grow with the system font size up to 1.3x, then
+        // shrink to fit instead of truncating to "Ho…".
+        tabBarLabel: ({ color, children }) => (
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} maxFontSizeMultiplier={1.3} style={{ color, fontSize: 11, fontWeight: "600" }}>
+            {children}
+          </Text>
+        ),
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
         sceneStyle: { backgroundColor: colors.bg },

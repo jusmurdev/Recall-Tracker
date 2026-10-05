@@ -7,9 +7,11 @@ import type { MapRestaurant } from "@recall/shared";
 import { api } from "@/api/client";
 import { RestaurantMap, mapViewAvailable } from "@/components/RestaurantMap";
 import { useBottomPad } from "@/hooks/useBottomPad";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Stars } from "@/components/Stars";
 import { Body, Button, Empty, GradeBadge, Loading, Small } from "@/components/ui";
 import { useLocationState } from "@/hooks/useLocationState";
+import { useMe } from "@/hooks/queries";
 import { colors, radius, spacing } from "@/lib/theme";
 
 const DEFAULT_CENTER = { latitude: 40.7074, longitude: -74.0113 }; // lower Manhattan until we know where you are
@@ -21,11 +23,13 @@ const DEFAULT_CENTER = { latitude: 40.7074, longitude: -74.0113 }; // lower Manh
  */
 export default function MapScreen() {
   const loc = useLocationState();
+  const premium = useMe().data?.tier === "premium";
   const [center, setCenter] = useState<{ latitude: number; longitude: number } | null>(null);
   const [radiusKm, setRadiusKm] = useState(1.5);
   const [selected, setSelected] = useState<string | null>(null);
   const listRef = useRef<FlatList<MapRestaurant>>(null);
   const bottomPad = useBottomPad(spacing(2));
+  const insets = useSafeAreaInsets();
   // Without a Google Maps key the Android map view throws; show the list on its own instead.
   const mapOk = mapViewAvailable();
 
@@ -63,7 +67,7 @@ export default function MapScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, paddingBottom: insets.bottom }}>
       <View style={[styles.mapWrap, !mapOk && styles.mapWrapCollapsed]}>
         {!mapOk ? (
           <View style={styles.noMap}>
@@ -89,8 +93,8 @@ export default function MapScreen() {
       <View style={[styles.sheet, !mapOk && { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }]}>
         {mapOk ? <View style={styles.handle} /> : null}
         <View style={styles.sheetHeader}>
-          <Body style={{ fontWeight: "700" }}>{q.isLoading ? "Looking around…" : items.length ? `${items.length} place${items.length === 1 ? "" : "s"} within ${radiusKm < 1 ? `${Math.round(radiusKm * 1000)} m` : `${radiusKm.toFixed(1)} km`}` : "Nothing here yet"}</Body>
-          {q.data?.discovery.source ? <Small>Grades from {q.data.discovery.source === "nyc_dohmh" ? "NYC Health" : q.data.discovery.source === "chicago_cdph" ? "Chicago Public Health" : q.data.discovery.source}</Small> : <Small>Health grades are public data. Tracking is Premium.</Small>}
+          <Body style={{ fontWeight: "700" }}>{q.isLoading ? "Looking around…" : items.length ? `${items.length} place${items.length === 1 ? "" : "s"} within ${radiusKm < 1 ? `${Math.round(radiusKm * 1000)} m` : `${radiusKm.toFixed(1)} km`}` : "Nearby"}</Body>
+          {q.data?.discovery.source ? <Small>Grades from {q.data.discovery.source === "nyc_dohmh" ? "NYC Health" : q.data.discovery.source === "chicago_cdph" ? "Chicago Public Health" : q.data.discovery.source}</Small> : premium ? <Small>Health grades are public data.</Small> : <Small>Health grades are public data. Tracking is Premium.</Small>}
         </View>
         <FlatList
           ref={listRef}

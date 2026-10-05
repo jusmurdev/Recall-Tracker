@@ -47,7 +47,7 @@ Run these with `curl` against `http://localhost:4000` and record PASS/FAIL with 
 | A10 | `GET /v1/recalls?limit=50` | every item has a `headline` of 70 characters or fewer with no leading `COMPANY:` prefix and no all-caps shouting; note any that still look raw |
 | A11 | `PATCH /v1/me/preferences` `{"dietProfiles":["allergy_peanut","vegan"],"otherAllergens":["mustard"]}` | 200, `diet` echoes it, `dietAlertsAdded` ≥ 1; `{"dietProfiles":["paleo"]}` is 400 |
 | A12 | `GET /v1/recalls?diet=1` with the token; then without a token | with: items each carry `dietHit.explanation`; without: 401 |
-| A13 | `POST /v1/scan/match` `{"ocrText":"ZAPPO CRUNCH BAR\nINGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR"}` with the diet user | `status` = `clear`, `diet` lists a mustard-allergy hit (and milk/vegan hits if those profiles are on) |
+| A13 | `POST /v1/scan/match` `{"ocrText":"ZAPPO CRUNCH BAR\nINGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR"}` with the diet user | `status` = `clear` and `matches` empty even with live FDA data (no match via "crunch"), `diet` lists a mustard-allergy hit (and milk/vegan hits if those profiles are on). Also `{"ocrText":"Prairie Paws dog food"}` returns exactly one match |
 | A14 | `DELETE /v1/me` for the verify user, then `GET /v1/me` | 204 then 401 |
 
 ## Phase B: phone tour (Codex, agent mode, screenshots to `.work/shots/`, notes to `.work/tour.md`)
@@ -91,29 +91,41 @@ even spacing, no clipped or mid-word-wrapped text, US spelling.
 | B15 | You tab, Quiet hours row: tap the **label text**, not the switch | the switch toggles |
 | B16 | Premium screen (free user) | reads "Billed through Google Play" |
 | B17 | Recall detail → Show details → Barcodes | 12-digit UPC, not 14 digits with leading zeros |
-| B18 | You tab → "Diet and allergies" | nine allergen chips, an "Another allergen" box with Add, switches for Gluten-free, Halal diet, Kosher, Vegan; "About diet alerts" link opens the info screen |
-| B19 | Tap Peanuts off and on again, then add "lupin" as another allergen | each save sticks after pull-to-refresh; a note appears saying N recalls from the last few weeks match; "lupin" shows as a removable chip |
+| B18 | You tab → "Diet and allergies" | nine allergen chips, an "Other allergen" box with Add and a hint line below it, switches for Gluten-free, Halal diet, Kosher, Vegan; "About diet alerts" link opens the info screen |
+| B19 | Tap Peanuts off and on again, then add "lupin" as another allergen | each save sticks after pull-to-refresh; a note appears right under the card's intro saying "N recent recalls match your profile" with an Open button (or "No current recall matches"), and N counts only profiles that are on; "lupin" shows as a removable chip |
 | B20 | Home | the alert card leads with "N recalls match your …" and diet matches are listed first |
 | B21 | Alerts tab | diet alerts show "Undeclared allergen · matters for your peanut allergy" style notes |
 | B22 | Open the peanut diet alert | a card named "Peanut allergy" shows "Undeclared · "peanuts"", the explanation, and the phrase highlighted in the notice excerpt; "About diet alerts" button present |
 | B23 | Browse → "For my diet" chip | list narrows to diet matches; each row explains why; turn the chip off and the full list returns |
-| B24 | Scan, type `Zappo Crunch Bar` then a second line `INGREDIENTS: SUGAR, RICE, CASEIN, PORK GELATIN, MUSTARD FLOUR` | "Looks fine" plus a "Heads up for your diet" card listing milk, halal, kosher, vegan and mustard lines |
+| B24 | Scan, type `Mustard pretzels`, Check it; then type `Zappo Crunch Bar` | first: "Looks fine" plus a "Heads up for your diet" card with a mustard-allergy line; second: "Looks fine" with no recall rows at all (no "possible recalls" via the word "crunch"). The product box is single-line now, so multi-line ingredient text is covered by A13 and B25 |
 | B25 | Scan a real product label in the kitchen with milk or soy in the ingredients | heads-up card appears on the result; note OCR latency |
 | B26 | Scan a real receipt | lines with milk, eggs, etc. carry small diet tags |
 | B27 | You tab → turn every diet switch and chip off, remove "mustard" and "lupin" | Browse "For my diet" chip now opens Settings instead of filtering; Home no longer leads with diet; existing diet alerts stay in the inbox as history |
-| B28 | Kill and relaunch the app | Home renders from cache immediately |
+| B28 | Kill and relaunch the app (release build if you can: `npx expo run:android --variant release --device`) | Home renders from cache before the network answers; note splash and first-content times |
+| B29 | Android Settings → Display → Font size at default, then about 1.3x, then the largest; check You → Diet and allergies, Scan typed inputs (product and receipt), Browse search, Watch a brand, Track a restaurant, and the tab bar | no placeholder or typed text is cut off or clipped top/bottom; at large sizes the Add button wraps below the allergen field instead of leaving the card; tab labels shrink to fit rather than showing "Ho…"; the Product/Receipt switch fits |
+| B30 | You → tap the "Other allergen" field | the screen scrolls so the field and the Add button stay above the keyboard; type a word and tap Add |
+| B31 | As the premium user: scan a receipt with short cashier lines, and open the restaurant map | no "Premium reads the photo with AI" tip and no "Tracking is Premium" line; the map list shows one empty state, not two |
+| B32 | Scan tab | "Keep an eye on this for me" is off by default; scan `MILK` with it switched on: no `milk` or `scan` watch item is created (check Watchlist) |
+| B33 | Browse, search `tray` or `insert` or `kit` (live FDA device data) | headlines have no `Brand Name:` prefix, no catalog/part numbers like `DYNJ59097A` or `5612-P-411`, and no all-caps words |
 
 ## Phase C: tests (Codex)
 
-`npm run typecheck` and `TEST_DATABASE_URL=postgresql://recall:recall@localhost:5432/recall_tracker_test npm test -w @recall/api` and `npm test -w @recall/mobile`. Expect 113 API tests and 9 mobile tests passing. Report counts and any failure's first five lines.
+`npm run typecheck` and `TEST_DATABASE_URL=postgresql://recall:recall@localhost:5432/recall_tracker_test npm test -w @recall/api` and `npm test -w @recall/mobile`. Expect 116 API tests and 9 mobile tests passing. Report counts and any failure's first five lines.
 
 ## Phase D: report (you)
 
-Write `$ROOT/VERIFY_REPORT.md`: environment line; a table for A1–A14, B1–B28 and the test run
+Write `$ROOT/VERIFY_REPORT.md`: environment line; a table for A1–A14, B1–B33 and the test run
 with PASS/FAIL, screenshot name and a one-line note; a "Still broken" list with steps, expected,
 actual, screenshot and your guess at the file; a "New problems" list for anything the fixes
 introduced; and the Codex-vs-Claude call split. Show me the report and attach B1, B8, B18, B22
 and B24. Do not commit or push.
+
+## Environment notes from the last run
+
+- Metro may need another port if something holds 8081 (`npx expo start --port 8082`, then `adb reverse tcp:8082 tcp:8082`).
+- Airplane mode does not cut the USB `adb reverse` tunnel. To simulate offline, stop the API process instead.
+- In a dev build, dismiss the "Open debugger to view warnings" toast before tapping the tab bar.
+- Live USDA/FSIS may return 403; fixtures cover it. Live FDA data includes real "Crunch" and "Prairie" recalls, which is exactly what A13 and B24 now check against.
 
 ## Rules
 

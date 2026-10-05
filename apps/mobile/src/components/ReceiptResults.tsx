@@ -6,6 +6,7 @@ import type { ReceiptItem, ReceiptScanResponse } from "@recall/shared";
 import { Card, PremiumTag, RecallRow, Small, Subtitle } from "@/components/ui";
 import { DietHeadsUp } from "@/components/DietHeadsUp";
 import { plainReason } from "@/lib/friendly";
+import { useMe } from "@/hooks/queries";
 import { colors, radius } from "@/lib/theme";
 
 const STATUS: Record<ReceiptItem["status"], { icon: React.ComponentProps<typeof Ionicons>["name"]; color: string; label: string }> = {
@@ -16,6 +17,7 @@ const STATUS: Record<ReceiptItem["status"], { icon: React.ComponentProps<typeof 
 
 /** Line-by-line receipt verdict: flagged items first, each tappable to the recall. */
 export function ReceiptResults({ result }: { result: ReceiptScanResponse }) {
+  const premium = useMe().data?.tier === "premium";
   const items = [...result.items].sort((a, b) => rank(a.status) - rank(b.status));
   const flagged = result.items.filter((i) => i.status !== "clear");
   return (
@@ -57,7 +59,7 @@ export function ReceiptResults({ result }: { result: ReceiptScanResponse }) {
           </Pressable>
         );
       })}
-      {!result.decodedByAi && result.items.some((i) => i.terms.every((t) => t.length <= 4)) ? (
+      {!premium && !result.decodedByAi && result.items.some((i) => i.terms.every((t) => t.length <= 4)) ? (
         <View style={styles.tip}>
           <PremiumTag />
           <Small style={{ flex: 1 }}>Some lines were hard to decode. Premium reads the photo with AI for a cleaner result.</Small>

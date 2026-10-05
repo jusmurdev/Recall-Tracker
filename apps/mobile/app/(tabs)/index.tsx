@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const open = (alerts.data?.items ?? []).filter((a) => !a.resolvedAt && !a.dismissedAt);
   const unread = open.filter((a) => !a.readAt);
   // Diet matches lead: "1 recall matches your peanut allergy" says more than "1 thing needs a look".
-  const dietLead = dietHeadline(open);
+  const dietLead = dietHeadline(open, me.data?.diet ?? null);
   const ordered = [...open].sort((a, b) => Number(b.reason === "diet_match") - Number(a.reason === "diet_match") || b.score - a.score);
   const watching = list.data?.items.length ?? 0;
   const hour = new Date().getHours();

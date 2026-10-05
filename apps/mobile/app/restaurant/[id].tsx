@@ -19,7 +19,7 @@ export default function PublicRestaurant() {
   const create = useCreateWatchItem();
   if (!q.data) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
@@ -35,7 +35,7 @@ export default function PublicRestaurant() {
       : router.push("/premium");
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <Stack.Screen options={{ title: "" }} />
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 6 }}>

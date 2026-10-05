@@ -29,7 +29,7 @@ export default function AlertDetail() {
   }, [q.data?.id]);
   if (!q.data) {
     return (
-      <Screen>
+      <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
@@ -39,7 +39,7 @@ export default function AlertDetail() {
   const steps = (r.remedy ?? "").split(/(?<=[.!])\s+/).map((s) => s.trim()).filter((s) => s.length > 8).slice(0, 3);
 
   return (
-    <Screen>
+    <Screen edges={["bottom"]}>
       <ScrollView contentContainerStyle={{ padding: spacing(2), gap: spacing(2), paddingBottom: bottomPad }}>
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>

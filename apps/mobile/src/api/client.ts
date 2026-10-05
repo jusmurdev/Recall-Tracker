@@ -141,7 +141,7 @@ export interface Stats {
 export const api = {
   me: () => request<Me>("/v1/me"),
   registerDevice: (body: RegisterDeviceRequest) => request<{ id: string }>("/v1/devices", { method: "POST", body: JSON.stringify(body) }),
-  updatePreferences: (body: UpdatePreferencesRequest) => request<NotificationPreferences & { diet: DietPreferences; dietAlertsAdded: number }>("/v1/me/preferences", { method: "PATCH", body: JSON.stringify(body) }),
+  updatePreferences: (body: UpdatePreferencesRequest) => request<NotificationPreferences & { diet: DietPreferences; dietAlertsAdded: number; dietAlertsMatching?: number }>("/v1/me/preferences", { method: "PATCH", body: JSON.stringify(body) }),
   deleteAccount: () => request<void>("/v1/me", { method: "DELETE" }),
   updateLocation: (body: UpdateLocationRequest) =>
     request<{ homeState: string | null; lastKnownState: string | null; lastLocationAt: string | null }>("/v1/me/location", { method: "PUT", body: JSON.stringify(body) }),

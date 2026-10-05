@@ -58,7 +58,7 @@ export default function BrowseScreen() {
               <Title>Browse recalls</Title>
               <Small>Everything from the FDA, USDA and CPSC, in plain English.</Small>
             </View>
-            <Input placeholder="Search a brand, product or ingredient" value={q} onChangeText={setQ} autoCorrect={false} returnKeyType="search" />
+            <Input placeholder="Search recalls" value={q} onChangeText={setQ} autoCorrect={false} returnKeyType="search" />
             {offline && items.length ? <OfflineNotice stale onRetry={() => void feed.refetch()} /> : null}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.pillRow}>
               <Pill label={nearMe && loc.state ? `Sold in ${loc.state}` : loc.busy ? "Locating…" : "Near me"} icon="location-outline" active={nearMe} onPress={() => void toggleNearMe()} />

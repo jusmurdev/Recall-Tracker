@@ -6,6 +6,8 @@ import { spacing } from "@/lib/theme";
  * edge-to-edge, so the system navigation bar overlaps the last row unless we add its height.
  */
 export function useBottomPad(extra = spacing(4)): number {
-  const insets = useSafeAreaInsets();
-  return extra + insets.bottom;
+  // The Screen container applies the inset (edges={["bottom"]}); content keeps ordinary padding.
+  // Kept as a hook so screens can still react if the container ever stops doing that.
+  useSafeAreaInsets();
+  return extra;
 }
