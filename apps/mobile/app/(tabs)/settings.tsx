@@ -10,6 +10,7 @@ import { Body, Button, Card, Collapsible, Hint, Input, Pill, PremiumTag, Screen,
 import { ALLERGY_PROFILES, DIET_TOGGLES, EMPTY_DIET, addOtherAllergen, removeOtherAllergen, toggleProfile } from "@/lib/diet";
 import { deviceTimezone } from "@/hooks/useTimezoneSync";
 import { usePushStatus } from "@/lib/pushStatus";
+import { resetWidgets } from "@/widgets/WidgetSync";
 import { useMe, useStats, useUpdatePreferences, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { setToken } from "@/lib/auth";
@@ -107,6 +108,7 @@ export default function SettingsScreen() {
           await api.deleteAccount();
           await setToken("");
           qc.clear();
+          await resetWidgets();
           RNAlert.alert("Done", "Your data has been deleted.");
         },
       },

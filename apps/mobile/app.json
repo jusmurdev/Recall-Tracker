@@ -88,7 +88,39 @@
           "resizeMode": "contain"
         }
       ],
-      "./plugins/withQaCleartext.js"
+      "./plugins/withQaCleartext.js",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "RecallStatus",
+              "label": "Recall status",
+              "description": "Whether anything you watch has been recalled, with the latest alerts.",
+              "minWidth": "180dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "420dp",
+              "maxResizeHeight": "300dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "QuickScan",
+              "label": "Quick scan",
+              "description": "Open the scanner on a product or a receipt in one tap.",
+              "minWidth": "180dp",
+              "minHeight": "50dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 1,
+              "maxResizeWidth": "420dp",
+              "maxResizeHeight": "110dp",
+              "resizeMode": "horizontal"
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,0 +1,20 @@
+/** Test-only stand-in for react-native: just enough for pure modules and widget tree building. */
+const Noop = () => null;
+export const Platform = { OS: "ios", select: <T,>(o: { ios?: T; default?: T }) => o.ios ?? o.default };
+export const NativeModules = {};
+export const TurboModuleRegistry = { getEnforcing: () => ({}) };
+export const AppRegistry = { registerHeadlessTask: () => undefined, registerComponent: () => undefined };
+export const PixelRatio = { getFontScale: () => 1, get: () => 1 };
+export const StyleSheet = { create: <T,>(s: T) => s, flatten: <T,>(s: T) => s, absoluteFill: {} };
+export const View = Noop;
+export const Text = Noop;
+export const Image = Noop;
+export const ScrollView = Noop;
+export const Pressable = Noop;
+export const TouchableOpacity = Noop;
+export const ActivityIndicator = Noop;
+export const useWindowDimensions = () => ({ width: 390, height: 844, scale: 1, fontScale: 1 });
+export const Dimensions = { get: () => ({ width: 390, height: 844, scale: 1, fontScale: 1 }) };
+export default { Platform, NativeModules, TurboModuleRegistry, AppRegistry, PixelRatio, StyleSheet, View, Text, Image, ScrollView, Pressable, TouchableOpacity, ActivityIndicator, Dimensions };
+export const FlatList = Noop;
+export const TouchableNativeFeedback = Noop;

@@ -13,6 +13,7 @@ import { useGeofenceSync } from "@/hooks/useGeofenceSync";
 import { useTimezoneSync } from "@/hooks/useTimezoneSync";
 import { colors } from "@/lib/theme";
 import { shouldPersistQuery } from "@/lib/home";
+import { WidgetSync } from "@/widgets/WidgetSync";
 // Registers the background geofence task at bundle load (required by iOS).
 import "@/lib/geofence";
 
@@ -31,7 +32,12 @@ function Boot({ children }: { children: React.ReactNode }) {
   usePushRegistration();
   useGeofenceSync(ready);
   useTimezoneSync(ready);
-  return ready ? <>{children}</> : null;
+  return ready ? (
+    <>
+      <WidgetSync />
+      {children}
+    </>
+  ) : null;
 }
 
 export default function RootLayout() {

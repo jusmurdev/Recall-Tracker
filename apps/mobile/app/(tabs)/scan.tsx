@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import * as ImageManipulator from "expo-image-manipulator";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ReceiptScanResponse, ScanMatchResponse } from "@recall/shared";
@@ -30,6 +30,16 @@ export default function ScanScreen() {
   const scan = useScanMatch();
   const receipt = useScanReceipt();
   const [target, setTarget] = useState<Target>("product");
+  // Home screen widget: recalltracker://scan?target=receipt opens straight on the receipt scanner.
+  const params = useLocalSearchParams<{ target?: string }>();
+  useEffect(() => {
+    if (params.target === "product" || params.target === "receipt") {
+      setTarget(params.target);
+      setProductResult(null);
+      setReceiptResult(null);
+      setMode("camera");
+    }
+  }, [params.target]);
   const [mode, setMode] = useState<Mode>("camera");
   const [busy, setBusy] = useState<string | null>(null);
   const [text, setText] = useState("");
