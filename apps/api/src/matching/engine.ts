@@ -60,6 +60,13 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     const distinctive = matchedTerms.filter((t) => !isGenericTerm(t));
     const genericOnly = !distinctive.length;
     if (genericOnly && item.kind === "scan") return null;
+    // "Zappo Crunch Bar" shares the word "crunch" with every crunchy cereal, and "Prairie Paws"
+    // shares "prairie" with a soup. One single word in common, when the item has other
+    // distinctive words that did not match, is coincidence: a scan says nothing, a watch item
+    // keeps a low-confidence entry that is never pushed.
+    const distinctiveTotal = item.terms.filter((t) => !isGenericTerm(t) && !t.includes(" ")).length;
+    const weak = distinctive.length === 1 && !distinctive[0]!.includes(" ") && distinctiveTotal >= 2;
+    if (weak && item.kind === "scan") return null;
     const lowerCompany = recall.company.toLowerCase();
     const lowerBrands = recall.brands.map((b) => b.toLowerCase());
     // Brand names lead product descriptions ("Jif Creamy Peanut Butter…"), so the first few
@@ -96,6 +103,7 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     // Someone who deliberately watches "milk" still hears about milk recalls, just never as a
     // top-confidence match.
     if (genericOnly && !companyHitOrGeneric) score = Math.min(score, 0.6);
+    if (weak) score = Math.min(score, 0.4);
   } else {
     return null;
   }

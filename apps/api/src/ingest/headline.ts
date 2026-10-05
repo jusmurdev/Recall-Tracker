@@ -11,6 +11,11 @@ const KEEP_UPPER = new Set(["usda", "fda", "cpsc", "upc", "rte", "bbq", "usa", "
 /** Words that read fine in lower case inside a title. */
 const SMALL = new Set(["a", "an", "and", "or", "of", "the", "in", "on", "for", "with", "to", "by", "at", "from", "w"]);
 
+/** Label prefixes catalog-style titles carry: "Brand Name: VERIQA", "REF: 1234", "Catalog No. 55". */
+const LABEL_PREFIX = /^\s*(brand name|brand|product name|product|trade name|device name|model name|catalog(?:ue)? (?:no|number|#)\.?|ref\.?|item(?: no| number)?)\s*[:#]\s*/i;
+/** Part and catalog numbers: letters and digits mixed, with digits ("DYNJ59097A", "5612-P-411", "REF 1234-56"). */
+const PART_NUMBER = /\b(?:ref|cat(?:alog)?(?:\s*no)?\.?|model|p\/n|part(?: no)?\.?|sku|item(?: no)?\.?|lot)\s*[:#]?\s*[A-Za-z0-9][A-Za-z0-9./-]*\d[A-Za-z0-9./-]*|\b(?=[A-Za-z0-9./-]*\d)(?=[A-Za-z0-9./-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9./-]{3,}\b|\b\d{5,}[A-Za-z0-9-]*\b/gi;
+const SIZE_SPEC = /\b(?:size|sz)\s*[:#]?\s*\d+(?:\.\d+)?\b|\b\d+(?:\.\d+)?\s*(?:mm|cm|mg|mcg|ml|fr|ga|gauge|in|inch)\b\.?/gi;
 const PACK_SIZE = /\b\d+(\.\d+)?\s*(\/\s*\d+(\.\d+)?)?\s*(?:#|(?:lb|lbs|oz|fl ?oz|ml|l|g|kg|ct|cnt|count|pk|pack|ea|each|gal|qt|pt|dz|dozen|z)\b\.?)/gi;
 const RATIO = /\b\d+\/\d+\b/g; // 50/50, 4/5
 const CODE_TAIL = /\s*[,;(]?\s*(upc|lot|lots|item|sku|model|code|codes|case|best by|use by|sell by|exp|expires|batch)\b.*$/i;
@@ -36,6 +41,18 @@ export function sentenceCase(s: string): string {
     .join(" ");
 }
 
+/** "Haylard BASIC BIOPSY TRAY" → "Haylard basic biopsy tray": lower-case shouting words inside an otherwise normal title. */
+export function calmWords(s: string): string {
+  return s
+    .split(/(\s+)/)
+    .map((w) => {
+      const letters = w.replace(/[^A-Za-z]/g, "");
+      if (letters.length >= 4 && letters === letters.toUpperCase() && !KEEP_UPPER.has(letters.toLowerCase())) return w.toLowerCase();
+      return w;
+    })
+    .join("");
+}
+
 export interface HeadlineInput {
   title: string;
   company?: string | null;
@@ -54,15 +71,18 @@ export function cleanHeadline(r: HeadlineInput, max = 70): string {
     if (!company || prefix === company || company.startsWith(prefix) || prefix.startsWith(company.slice(0, 12)) || /\b(inc|llc|co|corp|ltd|company|foods|farms|brands)\b\.?$/.test(prefix)) t = t.slice(colon + 2);
   }
   t = t.replace(/^(public health alert:\s*)/i, "");
+  t = t.replace(LABEL_PREFIX, "");
   // Agency headlines: "Acme Foods Recalls Ready-To-Eat Liverwurst Products Due to Possible Listeria".
   const m = t.match(/\b(?:recalls|issues (?:a )?public health alert for|expands recall of)\s+(.+?)(?:\s+(?:due to|because of|for possible|over|that may)\b.*)?$/i);
   if (m) t = m[1]!;
   t = t.replace(CODE_TAIL, "");
+  t = t.replace(SIZE_SPEC, " ").replace(PART_NUMBER, " ");
   t = t.replace(PACK_SIZE, " ").replace(RATIO, " ");
   t = t.replace(/\s*\([^)]*\)\s*/g, " "); // parenthetical codes/sizes
   t = t.split(/[,;]/)[0]!;
   t = t.replace(/\s{2,}/g, " ").replace(TRAILING_PUNCT, "").trim();
   if (isShouting(t)) t = sentenceCase(t);
+  else t = calmWords(t);
   if (!t) t = r.brands?.[0] ?? r.company ?? r.title;
   if (t.length > max) {
     const cut = t.slice(0, max - 1);

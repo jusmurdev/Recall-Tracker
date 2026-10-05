@@ -77,7 +77,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     // New selection: surface recent recalls that already match, so the change is visible at once.
     const dietChanged = JSON.stringify(dietOf(user)) !== JSON.stringify(dietOf(updated));
     const backfilled = dietChanged ? await backfillDietAlerts(updated) : 0;
-    return { ...prefsOf(updated), diet: dietOf(updated), dietAlertsAdded: backfilled };
+    // "N recalls match" must count what matches now, not only alerts created this second: toggling
+    // a profile off and on creates nothing new, yet the matches are still there.
+    // Only alerts for the profiles that are on now: switching milk off must not keep counting milk.
+    const activeProfiles = [...updated.dietProfiles, ...(updated.otherAllergens.length ? ["allergy_other"] : [])];
+    const matching = dietChanged && activeProfiles.length
+      ? await prisma.alert.count({ where: { userId: user.id, reason: "diet_match", dietProfile: { in: activeProfiles }, dismissedAt: null, resolvedAt: null } })
+      : 0;
+    return { ...prefsOf(updated), diet: dietOf(updated), dietAlertsAdded: backfilled, dietAlertsMatching: matching };
   });
 
   /**

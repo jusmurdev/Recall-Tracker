@@ -57,6 +57,14 @@ describe("HTTP API (integration)", () => {
     expect(stats.json().totalBySource).toEqual({ FDA: 5, FSIS: 2, CPSC: 2 });
   });
 
+  it("allows the methods the app uses through CORS preflight", async () => {
+    for (const method of ["PATCH", "PUT", "DELETE"]) {
+      const res = await app.inject({ method: "OPTIONS", url: "/v1/me/preferences", headers: { origin: "http://localhost:8080", "access-control-request-method": method } });
+      expect(res.statusCode, method).toBe(204);
+      expect(String(res.headers["access-control-allow-methods"]), method).toContain(method);
+    }
+  });
+
   it("requires auth for personal endpoints", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/watchlist" });
     expect(res.statusCode).toBe(401);
@@ -131,10 +139,14 @@ describe("HTTP API (integration)", () => {
     // Watch everything: creates watch items once, alerts for the recalled ones.
     const before = await prisma.watchItem.count({ where: { userId } });
     const watched = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, watch: true, context: "weekly shop" } });
-    expect(watched.json().items.every((i: { watchItemId: string | null }) => i.watchItemId)).toBe(true);
-    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 4);
+    // Lines with a brand or product name are watched; "banana organic" (generic words only) is not,
+    // because it could never match a recall without raising noise.
+    const watchedItems = watched.json().items as Array<{ product: string; watchItemId: string | null }>;
+    expect(watchedItems.filter((i) => i.watchItemId)).toHaveLength(3);
+    expect(watchedItems.find((i) => i.product === "banana organic")!.watchItemId).toBeNull();
+    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 3);
     const again = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, watch: true } });
-    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 4); // de-duplicated
+    expect(await prisma.watchItem.count({ where: { userId } })).toBe(before + 3); // de-duplicated
     expect(again.json().items[0].watchItemId).toBe(watched.json().items[0].watchItemId);
     const jifItem = await prisma.watchItem.findUniqueOrThrow({ where: { id: watched.json().items[0].watchItemId } });
     expect(jifItem).toMatchObject({ kind: "scan", importedFrom: "receipt" });
@@ -172,6 +184,19 @@ describe("HTTP API (integration)", () => {
     // A different dog food is not dragged in by the generic words.
     const other = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Acme Kibble dog food" } });
     expect(other.json().matches.map((m: { recall: { sourceId: string } }) => m.recall.sourceId)).not.toContain("F-1471-2026");
+
+    // One common word in common with a recall ("crunch", "prairie") is coincidence, not a match.
+    const decoy = (sourceId: string, title: string, productDescription: string) => ({
+      source: "FDA" as const, sourceId, title, summary: "Listeria.", productDescription, reason: "Potential Listeria contamination.", category: "food" as const, severity: "high" as const, status: "ongoing" as const,
+      company: "Decoy Foods", brands: [] as string[], upcs: [] as string[], distributionStates: ["US"], publishedAt: new Date(), contentHash: `decoy-${sourceId}`, raw: {},
+    });
+    await prisma.recall.createMany({ data: [decoy("DECOY-CRUNCH", "Decoy Foods: Protein Cereal Cocoa Crunch", "Protein Cereal Cocoa Crunch, 12 oz box"), decoy("DECOY-PRAIRIE", "Decoy Foods: Hondashi Prairie Soup Base", "Hondashi Prairie Soup Base 4 oz")] });
+    const zappo = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Zappo Crunch Bar" } });
+    expect(zappo.json().status).toBe("clear");
+    expect(zappo.json().matches).toEqual([]);
+    const pawsAgain = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Prairie Paws dog food" } });
+    expect(pawsAgain.json().matches.map((m: { recall: { sourceId: string } }) => m.recall.sourceId)).toEqual(["F-1471-2026"]);
+    await prisma.recall.deleteMany({ where: { sourceId: { startsWith: "DECOY-" } } });
   });
 
   it("treats UPC-A, EAN-13 and spaced barcodes as the same code (device bug 7)", async () => {
@@ -449,6 +474,18 @@ describe("HTTP API (integration)", () => {
     expect(saved.statusCode).toBe(200);
     expect(saved.json().diet).toEqual({ dietProfiles: ["allergy_milk", "kosher"], otherAllergens: ["mustard"] });
     expect(saved.json().dietAlertsAdded).toBeGreaterThanOrEqual(1);
+    expect(saved.json().dietAlertsMatching).toBeGreaterThanOrEqual(saved.json().dietAlertsAdded);
+    // Off and on again: nothing new is created, but the matches are still reported.
+    await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["kosher"] } });
+    const again = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["allergy_milk", "kosher"] } });
+    expect(again.json().dietAlertsAdded).toBe(0);
+    expect(again.json().dietAlertsMatching).toBeGreaterThanOrEqual(1);
+    // Milk off: its alerts stay in the inbox but no longer count as matching the profile.
+    const milkOff = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["kosher"], otherAllergens: [] } });
+    const milkAlerts = await prisma.alert.count({ where: { userId: signin.json().user.id, dietProfile: "allergy_milk" } });
+    expect(milkAlerts).toBeGreaterThanOrEqual(1);
+    expect(milkOff.json().dietAlertsMatching).toBe(await prisma.alert.count({ where: { userId: signin.json().user.id, dietProfile: "kosher", dismissedAt: null, resolvedAt: null } }));
+    await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["allergy_milk", "kosher"], otherAllergens: ["mustard"] } });
     const me = await app.inject({ method: "GET", url: "/v1/me", headers: dietAuth });
     expect(me.json().diet.dietProfiles).toEqual(["allergy_milk", "kosher"]);
 

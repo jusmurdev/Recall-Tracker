@@ -12,6 +12,7 @@ import { prisma } from "../../db/client.js";
 import { recordAlertsForItem } from "../../matching/engine.js";
 import { identifyProduct } from "../../premium/scanIdentify.js";
 import { checkProduct } from "../../scan/check.js";
+import { isGenericTerm } from "../../scan/terms.js";
 import { refineAmbiguousHits } from "../../diet/aiClassify.js";
 import { dietHitsForLabel, hasDietSelection } from "../../diet/match.js";
 import { extractFromOcr } from "../../scan/extract.js";
@@ -37,12 +38,17 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     if (diet.some((h) => h.kind === "ambiguous") && isPremium(user) && body.ocrText) diet = await refineAmbiguousHits(user.id, body.ocrText, diet);
 
     let watchItem = null;
-    if (body.watch) {
+    // Watching "milk" (a generic word) would alert on every dairy recall, and a scan with no usable
+    // terms and no barcode has nothing to watch. Only create an item that can match something.
+    const watchable = !!extracted.upc || terms.some((t) => !isGenericTerm(t));
+    const firstLine = (body.ocrText ?? "").split(/\r?\n/).map((l) => l.trim()).find((l) => l.length >= 2);
+    const watchLabel = (extracted.brand ?? firstLine ?? body.context ?? extracted.upc ?? "Scanned product").slice(0, 120);
+    if (body.watch && watchable) {
       watchItem = await prisma.watchItem.create({
         data: {
           userId: user.id,
           kind: extracted.upc && !terms.length ? "upc" : "scan",
-          label: label.slice(0, 120),
+          label: watchLabel,
           terms,
           upc: extracted.upc,
           context: body.context,
@@ -132,7 +138,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
       const { matches, status } = await checkProduct(user, { label: line.product, terms: line.terms }, { limit: 5 });
       if (status !== "clear") flagged += 1;
       let watchItemId: string | null = null;
-      if (body.watch) {
+      if (body.watch && line.terms.some((t) => !isGenericTerm(t))) {
         const label = (line.brand && !line.product.includes(line.brand) ? `${line.brand} ${line.product}` : line.product).slice(0, 120);
         watchItemId = labels.get(label.toLowerCase()) ?? null;
         if (!watchItemId) {

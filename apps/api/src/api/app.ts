@@ -21,7 +21,9 @@ export async function buildApp(opts: { logger?: boolean } = {}): Promise<Fastify
     trustProxy: true,
   });
 
-  await app.register(cors, { origin: true });
+  // @fastify/cors allows only GET/HEAD/POST by default; the app also PATCHes preferences, PUTs
+  // location and DELETEs watch items, which browsers (the web build) preflight.
+  await app.register(cors, { origin: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] });
   await app.register(rateLimit, { max: 240, timeWindow: "1 minute" });
   await app.register(authPlugin);
 

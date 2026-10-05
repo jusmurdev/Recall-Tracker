@@ -34,3 +34,17 @@ describe("brand extraction", () => {
     expect(extractBrands("Ready-to-eat chicken salad")).toEqual([]);
   });
 });
+
+describe("headline cleaner on medical-device catalog titles", () => {
+  it("strips label prefixes, part numbers and size specs, and calms shouting words", () => {
+    expect(cleanHeadline({ title: "Brand Name: VERIQA", company: "Acme Medical" })).toBe("Veriqa");
+    expect(cleanHeadline({ title: "Convenience kits MYRINGOTOMY PACK-LF DYNJ59097A", company: "Medline" })).toBe("Convenience kits myringotomy pack-lf");
+    expect(cleanHeadline({ title: "Haylard BASIC BIOPSY TRAY", company: "Haylard" })).toBe("Haylard basic biopsy tray");
+    expect(cleanHeadline({ title: "TRIATHLON HINGE INSERT SIZE 4 11MM 5612-P-411 STERILE", company: "Stryker" })).toBe("Triathlon hinge insert sterile");
+    expect(cleanHeadline({ title: "Stryker: Catalog No. 5612-P-411 Triathlon Hinge Insert", company: "Stryker" })).toBe("Triathlon Hinge Insert");
+  });
+  it("leaves ordinary titles and known acronyms alone", () => {
+    expect(cleanHeadline({ title: "J.M. Smucker Co.: Jif Creamy Peanut Butter", company: "J.M. Smucker Co." })).toBe("Jif Creamy Peanut Butter");
+    expect(cleanHeadline({ title: "USDA Choice Beef Patties", company: "" })).toBe("USDA Choice Beef Patties");
+  });
+});
