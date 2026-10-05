@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "../db/client.js";
@@ -139,8 +140,8 @@ describe("HTTP API (integration)", () => {
     // Watch everything: creates watch items once, alerts for the recalled ones.
     const before = await prisma.watchItem.count({ where: { userId } });
     const watched = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: receipt, watch: true, context: "weekly shop" } });
-    // Lines with a brand or product name are watched; "banana organic" (generic words only) is not,
-    // because it could never match a recall without raising noise.
+    // Lines with a brand, or a store brand plus the product ("kroger whole milk"), are watched;
+    // "banana organic" (two generic words) is not, because it could only raise noise.
     const watchedItems = watched.json().items as Array<{ product: string; watchItemId: string | null }>;
     expect(watchedItems.filter((i) => i.watchItemId)).toHaveLength(3);
     expect(watchedItems.find((i) => i.product === "banana organic")!.watchItemId).toBeNull();
@@ -197,6 +198,68 @@ describe("HTTP API (integration)", () => {
     const pawsAgain = await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "Prairie Paws dog food" } });
     expect(pawsAgain.json().matches.map((m: { recall: { sourceId: string } }) => m.recall.sourceId)).toEqual(["F-1471-2026"]);
     await prisma.recall.deleteMany({ where: { sourceId: { startsWith: "DECOY-" } } });
+  });
+
+  it("does not flag store-brand receipt lines through store names or letters inside other words (round 3)", async () => {
+    const mk = (sourceId: string, company: string, title: string, productDescription: string, summary: string) => ({
+      source: "FDA" as const, sourceId, title, summary, productDescription, reason: summary, category: "food" as const, severity: "high" as const, status: "ongoing" as const,
+      company, brands: [] as string[], upcs: [] as string[], distributionStates: ["US"], publishedAt: new Date(), contentHash: `r3-${sourceId}`, raw: {},
+    });
+    // Stand-ins for the live recalls the device run hit.
+    await prisma.recall.createMany({
+      data: [
+        mk("R3-HANDLER", "Foundation Medicine", "Foundation Medicine: Hamilton Microlab STAR Liquid Handler", "Hamilton Microlab STAR Liquid Handler, bundled software 4.5", "Software issue that can cause an increase in spontaneous software closures."),
+        mk("R3-KITS", "Medline Industries", "Medline Convenience Kits: 1) neuro pack", "Convenience kits, great value bundle, legal size labels", "Sterility may be compromised."),
+        mk("R3-SANDWICH", "Taylor Fresh Foods", "Taylor Fresh Foods: Spicy Roast Beef Sandwich", "Spicy Roast Beef Sandwich sold at Kroger stores", "Undeclared milk; distributed to Kroger, Ralphs and Fred Meyer."),
+        mk("R3-EGGS", "Midwest Poultry", "Midwest Poultry: Large Grade A Eggs", "Large white eggs, 1 dozen, sold at Kroger", "Possible Salmonella."),
+        mk("R3-GVSOUP", "Walmart Inc.", "Walmart: Great Value Chicken Noodle Soup, 10.75 oz", "Great Value Chicken Noodle Soup, 10.75 oz can", "Possible underprocessing."),
+      ],
+    });
+    const res = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: "KROGER\nKRGR WHL MLK GAL 3.19\nGV CHKN NDL SP 1.29\nTOTAL 4.48" } });
+    const items = res.json().items as Array<{ product: string; status: string; terms: string[]; matches: Array<{ recall: { sourceId: string } }> }>;
+    const milk = items.find((i) => i.product.includes("milk"))!;
+    const soup = items.find((i) => i.product.includes("soup"))!;
+    expect(soup.product).toBe("great value chicken noodle soup");
+    expect(milk.status).toBe("clear");
+    for (const m of [...milk.matches, ...soup.matches]) expect(["R3-HANDLER", "R3-KITS", "R3-SANDWICH", "R3-EGGS"]).not.toContain(m.recall.sourceId);
+    // The one recall that really is Great Value chicken noodle soup is a "possible", never "recalled":
+    // a store brand plus generic words cannot be more certain than that.
+    expect(soup.status).toBe("possible");
+    expect(soup.matches.map((m) => m.recall.sourceId)).toEqual(["R3-GVSOUP"]);
+
+    // A store brand alone matches nothing.
+    expect((await app.inject({ method: "POST", url: "/v1/scan/match", headers: auth(), payload: { ocrText: "great value" } })).json().matches).toEqual([]);
+    // A distinctive brand on a receipt still flags.
+    const paws = await app.inject({ method: "POST", url: "/v1/scan/receipt", headers: auth(), payload: { ocrText: "PETSMART\nPRAIRIE PAWS DOG FOOD 24.99\nTOTAL 24.99" } });
+    expect(paws.json().items[0].status).toBe("recalled");
+
+    // Watch items (recall-arrives direction) also match whole words only.
+    const { matchRecalls } = await import("../matching/engine.js");
+    const watcher = await prisma.watchItem.create({ data: { userId, kind: "product", label: "ndl test", terms: ["ndl", "gal"] } });
+    const handler = await prisma.recall.findFirstOrThrow({ where: { sourceId: "R3-HANDLER" } });
+    const kits = await prisma.recall.findFirstOrThrow({ where: { sourceId: "R3-KITS" } });
+    await matchRecalls([handler, kits], { notify: false });
+    expect(await prisma.alert.count({ where: { watchItemId: watcher.id } })).toBe(0);
+    await prisma.watchItem.delete({ where: { id: watcher.id } });
+    await prisma.alert.deleteMany({ where: { recall: { sourceId: { startsWith: "R3-" } } } });
+    await prisma.recall.deleteMany({ where: { sourceId: { startsWith: "R3-" } } });
+  });
+
+  it("removes junk watch items left by earlier versions (cleanup migration)", async () => {
+    const sql = readFileSync(new URL("../../prisma/migrations/20261006060000_cleanup_junk_watch_items/migration.sql", import.meta.url), "utf8");
+    const junk = await prisma.watchItem.createManyAndReturn({
+      data: [
+        { userId, kind: "scan", label: "scan", terms: ["scan"] },
+        { userId, kind: "scan", label: "milk", terms: ["milk"] },
+        { userId, kind: "scan", label: "Zappo Crunch Bar", terms: ["zappo crunch bar", "zappo"] },
+        { userId, kind: "upc", label: "milk", terms: [], upc: "00051500241281" },
+      ],
+    });
+    await prisma.$executeRawUnsafe(sql);
+    const left = await prisma.watchItem.findMany({ where: { id: { in: junk.map((j) => j.id) } }, select: { label: true, kind: true } });
+    expect(left).toEqual(expect.arrayContaining([{ label: "Zappo Crunch Bar", kind: "scan" }, { label: "milk", kind: "upc" }]));
+    expect(left).toHaveLength(2);
+    await prisma.watchItem.deleteMany({ where: { id: { in: junk.map((j) => j.id) } } });
   });
 
   it("treats UPC-A, EAN-13 and spaced barcodes as the same code (device bug 7)", async () => {

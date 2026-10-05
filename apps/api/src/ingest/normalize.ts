@@ -81,6 +81,9 @@ export function extractUpcs(text: string | null | undefined): string[] {
 export function cleanText(input: string | null | undefined): string {
   if (!input) return "";
   return input
+    // openFDA serves "®" as "¿" in some device records ("Bard¿ Foley"); drop it and U+FFFD.
+    .replace(/(?<=[\p{L}\p{N}])¿/gu, "")
+    .replace(/\uFFFD/g, "")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n")
     .replace(/<[^>]+>/g, "")

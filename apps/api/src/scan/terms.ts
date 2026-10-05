@@ -33,6 +33,10 @@ export const GENERIC_WORDS = new Set([
   "vitamin", "vitamins", "supplement", "supplements", "capsules", "capsule", "tablets", "tablet", "gummies", "gummy", "softgels", "powder",
   "shampoo", "conditioner", "lotion", "soap", "toothpaste", "sunscreen", "deodorant", "wipes", "diapers", "tissue", "towels",
   "mug", "mugs", "tumbler", "cup", "blender", "heater", "charger", "battery", "batteries", "toy", "toys", "stroller", "crib", "helmet", "bike", "chair", "lamp", "candle", "candles",
+  // store names and store brands: where it was bought, not what it is ("Kroger" appears in the
+  // distribution list of every recall sold at Kroger)
+  "kroger", "krgr", "walmart", "wal-mart", "target", "costco", "safeway", "publix", "aldi", "wegmans", "meijer", "albertsons", "heb", "h-e-b", "vons", "ralphs", "giant", "winco", "sprouts", "cvs", "walgreens", "amazon", "instacart", "petsmart", "petco", "food lion", "shoprite", "sam's", "sams",
+  "kirkland", "equate", "up&up", "upup", "gv", "ks", "mm", "sig", "365", "o organics", "members", "member's", "mark", "truth", "gather", "everyday", "essentials", "smart", "way", "basics", "store brand",
   "product", "products", "item", "items", "brand", "store", "new", "best", "premium", "select", "signature", "choice", "quality", "farm", "farms", "fresh", "home", "house", "kitchen", "garden", "market", "pantry", "nature", "natures", "simply", "great", "good", "real",
 ]);
 
@@ -100,6 +104,14 @@ export function productTerms(text: string, opts: ProductTermsOptions = {}): stri
 }
 
 const STOP = new Set(["the", "and", "with", "of", "for", "a", "an", "in", "on", "to", "by", "per", "or", "w", "n", "it", "at", "from", "each", "ea", "qty", "x"]);
+
+/**
+ * Worth watching: a distinctive word (a brand), or a phrase of three or more words such as a
+ * store brand plus the product ("kroger whole milk"). A lone generic word ("milk") is not.
+ */
+export function isWatchable(terms: string[]): boolean {
+  return terms.some((t) => !isGenericTerm(t) || t.trim().split(/\s+/).length >= 3);
+}
 
 /** Display-friendly list of terms for an explanation ("prairie paws, dog food"). */
 export function describeTerms(terms: string[], limit = 3): string {

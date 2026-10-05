@@ -12,7 +12,7 @@ import { prisma } from "../../db/client.js";
 import { recordAlertsForItem } from "../../matching/engine.js";
 import { identifyProduct } from "../../premium/scanIdentify.js";
 import { checkProduct } from "../../scan/check.js";
-import { isGenericTerm } from "../../scan/terms.js";
+import { isWatchable } from "../../scan/terms.js";
 import { refineAmbiguousHits } from "../../diet/aiClassify.js";
 import { dietHitsForLabel, hasDietSelection } from "../../diet/match.js";
 import { extractFromOcr } from "../../scan/extract.js";
@@ -40,7 +40,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
     let watchItem = null;
     // Watching "milk" (a generic word) would alert on every dairy recall, and a scan with no usable
     // terms and no barcode has nothing to watch. Only create an item that can match something.
-    const watchable = !!extracted.upc || terms.some((t) => !isGenericTerm(t));
+    const watchable = !!extracted.upc || isWatchable(terms);
     const firstLine = (body.ocrText ?? "").split(/\r?\n/).map((l) => l.trim()).find((l) => l.length >= 2);
     const watchLabel = (extracted.brand ?? firstLine ?? body.context ?? extracted.upc ?? "Scanned product").slice(0, 120);
     if (body.watch && watchable) {
@@ -138,7 +138,7 @@ export async function scanRoutes(app: FastifyInstance): Promise<void> {
       const { matches, status } = await checkProduct(user, { label: line.product, terms: line.terms }, { limit: 5 });
       if (status !== "clear") flagged += 1;
       let watchItemId: string | null = null;
-      if (body.watch && line.terms.some((t) => !isGenericTerm(t))) {
+      if (body.watch && isWatchable(line.terms)) {
         const label = (line.brand && !line.product.includes(line.brand) ? `${line.brand} ${line.product}` : line.product).slice(0, 120);
         watchItemId = labels.get(label.toLowerCase()) ?? null;
         if (!watchItemId) {

@@ -59,6 +59,7 @@ const ABBREV: Record<string, string> = {
   frz: "frozen", frzn: "frozen", frsh: "fresh", veg: "vegetable", vegs: "vegetables", frt: "fruit", strwbry: "strawberry", strwb: "strawberry", bnna: "banana", ban: "banana",
   lttc: "lettuce", ltc: "lettuce", sld: "salad", spnch: "spinach", tmato: "tomato", tmt: "tomato", avo: "avocado", avcdo: "avocado", ptato: "potato", pot: "potato", onn: "onion",
   brd: "bread", wwb: "whole wheat bread", bgl: "bagel", trtla: "tortilla", trt: "tortilla", crkr: "cracker", crkrs: "crackers", ckie: "cookie", ckies: "cookies",
+  ndl: "noodle", ndls: "noodles", nddl: "noodle", sou: "soup",
   cerl: "cereal", crl: "cereal", oatml: "oatmeal", grnla: "granola", pst: "pasta", mac: "macaroni", rce: "rice", bns: "beans", sp: "soup", sce: "sauce", drsg: "dressing",
   pnts: "peanuts", nts: "nuts", almd: "almond", almnd: "almond", pcn: "pecan", pcns: "pecans", wlnt: "walnut", chcl: "chocolate", choc: "chocolate", cndy: "candy",
   wtr: "water", sprk: "sparkling", sda: "soda", cff: "coffee", cffe: "coffee", gf: "gluten free", df: "dairy free", sf: "sugar free", lf: "low fat", ff: "fat free",
@@ -74,7 +75,7 @@ const ABBREV_KEYS = Object.keys(ABBREV).sort((a, b) => b.length - a.length);
 
 const SKIP = /\b(sub ?total|total|tax|change|cash|visa|mastercard|master card|amex|discover|debit|credit|balance|savings|you saved|coupon|cpn|tender|auth|approved|items? sold|thank|welcome|store|cashier|register|reg\b|trans|transaction|ref\b|invoice|receipt|member|rewards|points|fuel|survey|www\.|\.com|tel|phone|\(\d{3}\)|\d{3}-\d{3}-\d{4}|loyalty|card|acct|account|chip|contactless|signature|customer copy|merchant|return policy|bottle dep|crv|bag fee|discount|promo|manager|st#|op#|te#|tc#|tr#|visit us)\b/i;
 const PRICE_RE = /(-?\$?\d{1,4}\.\d{2})\s*(?:[A-Z]{1,2}|\*|-)?\s*$/;
-const UNITS = new Set(["oz", "z", "lb", "lbs", "ct", "pk", "fl", "ml", "l", "g", "kg", "ea", "each", "qty", "x", "pc", "pcs", "in", "ft"]);
+const UNITS = new Set(["oz", "z", "lb", "lbs", "ct", "pk", "fl", "ml", "l", "g", "kg", "ea", "each", "qty", "x", "pc", "pcs", "in", "ft", "gal", "gallon", "qt", "quart", "pt", "pint", "dz", "doz", "dozen"]);
 const STOP = new Set(["the", "and", "with", "of", "for", "a", "an", "in", "on", "to", "by", "per", "or", "w", "n", "it", "at", "size", "pack", "count", "package", "box", "bag", "bottle", "can", "jar", "tub", "large", "small", "medium", "extra", "fresh", "natural", "value", "select", "brand", "food", "product", "item"]);
 
 export function detectStore(text: string): string | null {

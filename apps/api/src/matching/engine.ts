@@ -9,6 +9,8 @@ import { matchRecallsForDiet } from "../diet/alerts.js";
 
 /** Alerts below this score are stored (visible in the inbox) but not pushed. */
 export const PUSH_THRESHOLD = 0.5;
+/** Fuzzy (trigram) matching only for terms at least this long; short terms must match whole words. */
+const FUZZY_MIN_LENGTH = 6;
 /** Fuzzy term match strictness for pg_trgm word_similarity (0..1). */
 const FUZZY_THRESHOLD = 0.72;
 /** Only consider recalls from the last N days when a new watch item is created. */
@@ -59,7 +61,10 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     // matched alongside it.
     const distinctive = matchedTerms.filter((t) => !isGenericTerm(t));
     const genericOnly = !distinctive.length;
-    if (genericOnly && item.kind === "scan") return null;
+    // Only generic words in common ("whole milk", "chicken noodle soup", a store brand): a scan
+    // needs at least a three-word phrase to say anything, and even then only "possible".
+    const longPhrase = matchedTerms.some((t) => t.split(/\s+/).length >= 3);
+    if (genericOnly && item.kind === "scan" && !longPhrase) return null;
     // "Zappo Crunch Bar" shares the word "crunch" with every crunchy cereal, and "Prairie Paws"
     // shares "prairie" with a soup. One single word in common, when the item has other
     // distinctive words that did not match, is coincidence: a scan says nothing, a watch item
@@ -102,7 +107,7 @@ export function scoreMatch(item: WatchItemLite, recall: Recall, matchedTerms: st
     }
     // Someone who deliberately watches "milk" still hears about milk recalls, just never as a
     // top-confidence match.
-    if (genericOnly && !companyHitOrGeneric) score = Math.min(score, 0.6);
+    if (genericOnly && (!companyHitOrGeneric || item.kind === "scan")) score = Math.min(score, 0.6);
     if (weak) score = Math.min(score, 0.4);
   } else {
     return null;
@@ -149,12 +154,13 @@ export async function matchRecalls(recalls: Recall[], opts: { notify?: boolean }
     const text = recallText(recall);
     const plain = normalizeForMatch(text);
     const recallGtins = recall.upcs.map(normalizeGtin);
-    // A term matches when it appears verbatim, appears after stripping punctuation
-    // ("boars head" vs "Boar's Head"), or is trigram-similar to a substring of the text.
+    // A term matches as whole words: verbatim, after stripping punctuation ("boars head" vs
+    // "Boar's Head"), or trigram-similar for longer terms. Never inside another word: "ndl" must
+    // not match "Handler", "gal" must not match "legal".
     const termMatches = Prisma.sql`
-          ${text} LIKE '%' || replace(replace(replace(lower(t), '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%'
-             OR ${plain} LIKE '%' || regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g') || '%'
-             OR (length(t) >= 4 AND word_similarity(lower(t), ${text}) >= ${FUZZY_THRESHOLD})`;
+          ${text} ~ ('(^|[^a-z0-9])' || regexp_replace(lower(t), '([^a-z0-9 ])', '\\\\\\1', 'g') || '($|[^a-z0-9])')
+             OR ${plain} ~ ('(^| )' || regexp_replace(lower(t), '[^a-z0-9 ]', '', 'g') || '( |$)')
+             OR (length(t) >= ${FUZZY_MIN_LENGTH} AND word_similarity(lower(t), ${text}) >= ${FUZZY_THRESHOLD})`;
     const rows = await prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
       SELECT wi.id, wi."userId", wi.kind, wi.label, wi.terms, wi.upc, wi.categories, u."homeState", u."lastKnownState",
         ARRAY(
@@ -259,13 +265,12 @@ export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDa
   if (gtin) conditions.push(Prisma.sql`${gtin} = ANY(ARRAY(SELECT lpad(u, 14, '0') FROM unnest(r.upcs) AS u))`);
   const haystack = Prisma.sql`lower(r.title || ' ' || r."productDescription" || ' ' || r.company || ' ' || array_to_string(r.brands, ' '))`;
   for (const t of terms) {
-    const like = `%${escapeLike(t)}%`;
-    conditions.push(Prisma.sql`${haystack} LIKE ${like}`);
+    conditions.push(Prisma.sql`${haystack} ~ ${wholeWordPattern(t)}`);
     const plainTerm = normalizeForMatch(t);
     if (plainTerm.length >= 2) {
-      conditions.push(Prisma.sql`regexp_replace(${haystack}, '[^a-z0-9 ]', '', 'g') LIKE ${`%${plainTerm}%`}`);
+      conditions.push(Prisma.sql`regexp_replace(${haystack}, '[^a-z0-9 ]', '', 'g') ~ ${`(^| )${plainTerm}( |$)`}`);
     }
-    if (t.length >= 4) {
+    if (t.length >= FUZZY_MIN_LENGTH) {
       conditions.push(Prisma.sql`word_similarity(${t}, ${haystack}) >= ${FUZZY_THRESHOLD}`);
     }
   }
@@ -283,7 +288,7 @@ export async function findRecallsForItem(item: WatchItemLite, opts: { lookbackDa
   for (const recall of recalls) {
     const text = recallText(recall);
     const plain = normalizeForMatch(text);
-    const matched = terms.filter((t) => text.includes(t) || plain.includes(normalizeForMatch(t)) || fuzzyIncludes(text, t));
+    const matched = terms.filter((t) => termAppears(text, plain, t));
     const upcHit = !!gtin && recall.upcs.some((u) => normalizeGtin(u) === gtin);
     const match = scoreMatch(item, recall, matched, upcHit);
     if (match) out.push({ recall, match });
@@ -338,11 +343,29 @@ export function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 }
 
-/** Cheap in-process approximation of word_similarity for explanation purposes. */
-function fuzzyIncludes(text: string, term: string): boolean {
-  if (term.length < 4) return false;
-  const stripped = term.replace(/[^a-z0-9]/g, "");
-  return stripped.length >= 4 && text.replace(/[^a-z0-9]/g, "").includes(stripped);
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+
+/** Regex (JS and Postgres ARE compatible) that finds `term` as whole words in lower-cased text. */
+export function wholeWordPattern(term: string): string {
+  return `(^|[^a-z0-9])${escapeRegex(term.toLowerCase())}($|[^a-z0-9])`;
+}
+
+/**
+ * Does `term` appear in the recall text as whole words? Checked verbatim, then with punctuation
+ * stripped ("boars head" vs "Boar's Head"), then squeezed together for long terms ("boarshead").
+ * Substrings inside other words never count.
+ */
+export function termAppears(text: string, plain: string, term: string): boolean {
+  const t = term.toLowerCase();
+  if (new RegExp(wholeWordPattern(t)).test(text)) return true;
+  const p = normalizeForMatch(t);
+  if (p.length >= 2 && new RegExp(`(^| )${escapeRegex(p)}( |$)`).test(plain)) return true;
+  const squeezed = t.replace(/[^a-z0-9]/g, "");
+  if (squeezed.length >= FUZZY_MIN_LENGTH && squeezed !== p) {
+    // "boars head" written as "boarshead": compare as one word.
+    return new RegExp(`(^| )${escapeRegex(squeezed)}( |$)`).test(plain);
+  }
+  return false;
 }
 
 /** Persist Direction-B matches as alerts for the item's owner (no push: the user is looking at them). */

@@ -16,7 +16,7 @@ describe("headline cleaner", () => {
     expect(cleanHeadline({ title: "Public Health Alert: Hill Country Fare Chicken Salad", company: "" })).toBe("Hill Country Fare Chicken Salad");
   });
   it("never exceeds the maximum length and cuts at a word", () => {
-    const long = cleanHeadline({ title: "Some Company: " + "Very ".repeat(40) + "Long Product Name" });
+    const long = cleanHeadline({ title: "Some Company: " + "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango " + "Long Product Name" });
     expect(long.length).toBeLessThanOrEqual(70);
     expect(long.endsWith("…")).toBe(true);
   });
@@ -46,5 +46,28 @@ describe("headline cleaner on medical-device catalog titles", () => {
   it("leaves ordinary titles and known acronyms alone", () => {
     expect(cleanHeadline({ title: "J.M. Smucker Co.: Jif Creamy Peanut Butter", company: "J.M. Smucker Co." })).toBe("Jif Creamy Peanut Butter");
     expect(cleanHeadline({ title: "USDA Choice Beef Patties", company: "" })).toBe("USDA Choice Beef Patties");
+  });
+});
+
+describe("headline cleaner on round-3 device titles", () => {
+  it("drops mis-decoded trademark marks", () => {
+    expect(cleanHeadline({ title: "C.R. Bard, Inc.: Bard¿ Foley Tray With Urine Meter", company: "C.R. Bard, Inc." })).toBe("Bard Foley Tray With Urine Meter");
+    expect(cleanHeadline({ title: "Bayer: Medrad¿ Stellant flex Syringe Kit", company: "Bayer" })).toBe("Medrad Stellant flex Syringe Kit");
+  });
+  it("uses the product family instead of a numbered list", () => {
+    expect(cleanHeadline({ title: "Medline Convenience Kits: 1) neuro pack DYNJ12345, 2) spine pack", company: "Medline Industries, LP" })).toBe("Medline Convenience Kits");
+    const listOnly = cleanHeadline({ title: "Medline Industries, LP: 1) neuro", company: "Medline Industries, LP", productDescription: "1) Neuro Pack DYNJ59097A, 2) Spine Pack DYNJ59098A" });
+    expect(listOnly).toBe("Medline neuro Pack");
+    expect(listOnly.startsWith("1)")).toBe(false);
+  });
+  it("removes 'Products that contain' boilerplate", () => {
+    expect(cleanHeadline({ title: "Products that contain the Pericare Wipes: Admission Kit A, Admission Kit B, Admission Kit C with basin", company: "Medline Industries, LP" })).toBe("Pericare Wipes");
+  });
+  it("expands pharmacy shorthand and falls back when too little is left", () => {
+    expect(cleanHeadline({ title: "Hospira, Inc.: Dopamine HCl Inj", company: "Hospira, Inc." })).toBe("Dopamine HCl Injection");
+    expect(cleanHeadline({ title: "C.R. Bard, Inc.: Bardex¿ I", company: "C.R. Bard, Inc.", productDescription: "Bardex I.C. Foley Catheter, 16 Fr" })).toBe("Bardex");
+  });
+  it("trims catalog fragments, repeats and dangling letters from raw device titles", () => {
+    expect(cleanHeadline({ title: "ABG I ACETABULAR INSERT HOODED ID X ACETABULAR INSERT / OD X ID C-", company: "Stryker" })).toBe("ABG acetabular insert hooded");
   });
 });

@@ -5,7 +5,10 @@ import { cleanGtinInput, displayGtin, normalizeGtin } from "./gtin.js";
 describe("product terms", () => {
   it("ranks the phrase, distinctive words and pairs; drops generic singles", () => {
     expect(productTerms("Prairie Paws dog food")).toEqual(["prairie paws dog food", "prairie", "paws", "prairie paws", "paws dog", "dog food"]);
-    expect(productTerms("kroger creamy peanut butter 16 oz", { brand: "kroger" })).toEqual(["kroger", "kroger creamy peanut butter", "kroger creamy", "creamy peanut", "peanut butter"]);
+    // A store name or store brand is where it was bought, not what it is: never a term on its own.
+    expect(productTerms("kroger creamy peanut butter 16 oz", { brand: "kroger" })).toEqual(["kroger creamy peanut butter", "kroger creamy", "creamy peanut", "peanut butter"]);
+    // "great value" can appear as a word pair, but only as a generic term that never flags alone.
+    expect(productTerms("great value chicken noodle soup", { brand: "great value" }).filter((t) => !isGenericTerm(t))).toEqual([]);
   });
   it("weights generic words low and phrases high", () => {
     expect(isGeneric("milk")).toBe(true);
