@@ -20,6 +20,8 @@ export function ReceiptResults({ result }: { result: ReceiptScanResponse }) {
   const premium = useMe().data?.tier === "premium";
   const items = [...result.items].sort((a, b) => rank(a.status) - rank(b.status));
   const flagged = result.items.filter((i) => i.status !== "clear");
+  // Only what is really being watched: generic lines ("bananas") are never added.
+  const watchedCount = result.items.filter((i) => i.watchItemId).length;
   return (
     <>
       <Card tone={flagged.some((i) => i.status === "recalled") ? "critical" : flagged.length ? "high" : "success"}>
@@ -30,7 +32,7 @@ export function ReceiptResults({ result }: { result: ReceiptScanResponse }) {
             <Small>
               {result.store ? `${result.store}` : "Receipt"}
               {result.purchasedAt ? ` · ${result.purchasedAt}` : ""}
-              {result.watched ? " · we're watching these" : ""}
+              {watchedCount ? ` · watching ${watchedCount === result.items.length ? (watchedCount === 1 ? "it" : `all ${watchedCount}`) : `${watchedCount} of ${result.items.length}`}` : ""}
               {result.decodedByAi ? " · decoded with AI" : ""}
             </Small>
           </View>

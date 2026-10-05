@@ -155,6 +155,14 @@ build. OCR is a local Expo module in `apps/mobile/modules/vision-ocr` (Apple Vis
 ML Kit on Android) that returns positioned lines so receipts are rebuilt into rows on-device. Before shipping, replace the generated `assets/*.png` with real artwork,
 set `extra.eas.projectId`, `updates.url` and the `submit.production.ios` fields.
 
+Release builds block plain HTTP. For QA against a local API over `adb reverse`, opt in at
+prebuild time only; production builds never get it:
+
+```bash
+RECALL_QA_CLEARTEXT=1 npx expo prebuild -p android --clean
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 npx expo run:android --variant release --device
+```
+
 Set the API URL with `EXPO_PUBLIC_API_URL=https://your-api` or `extra.apiBaseUrl` in
 `app.json`. Push notifications go through Expo's push service; add your EAS `projectId`
 and (optionally) `EXPO_ACCESS_TOKEN` on the server.

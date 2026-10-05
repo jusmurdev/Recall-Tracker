@@ -87,7 +87,8 @@
           "backgroundColor": "#F7F4EE",
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "./plugins/withQaCleartext.js"
     ],
     "experiments": {
       "typedRoutes": true

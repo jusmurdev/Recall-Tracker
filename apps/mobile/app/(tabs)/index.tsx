@@ -3,12 +3,13 @@ import { router } from "expo-router";
 import React from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActionTile, Body, Card, Heading, Loading, OfflineNotice, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
+import { ActionTile, Body, Button, Card, Heading, Loading, OfflineNotice, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
 import { ApiError } from "@/api/client";
 import { useAlerts, useMe, useRecallFeed, useReceipts, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { whyAlert } from "@/lib/friendly";
 import { dietHeadline } from "@/lib/diet";
+import { homeStatus } from "@/lib/home";
 import { colors, radius, spacing } from "@/lib/theme";
 
 /**
@@ -37,6 +38,7 @@ export default function HomeScreen() {
   const offlineErr = (e: unknown) => !!e && (e instanceof ApiError ? e.offline : true);
   const offline = (alerts.isError && offlineErr(alerts.error)) || (feed.isError && offlineErr(feed.error));
   const retry = () => void Promise.all([alerts.refetch(), list.refetch(), feed.refetch(), me.refetch()]);
+  const status = homeStatus(alerts, open.length);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
@@ -45,11 +47,22 @@ export default function HomeScreen() {
           <Small>{greeting}</Small>
           <Title>Recall Tracker</Title>
         </View>
-        {offline ? <OfflineNotice stale={!!alerts.data || !!feed.data} onRetry={retry} /> : null}
+        {offline && status !== "unknown" ? <OfflineNotice stale={!!alerts.data || !!feed.data} onRetry={retry} /> : null}
 
-        {alerts.isLoading ? (
+        {status === "loading" ? (
           <Loading />
-        ) : open.length ? (
+        ) : status === "unknown" ? (
+          <Card tone="soft">
+            <View style={styles.heroRow}>
+              <Ionicons name="cloud-offline-outline" size={28} color={colors.muted} />
+              <View style={{ flex: 1 }}>
+                <Heading>We can't check right now</Heading>
+                <Small>We couldn't reach the server, so we can't say whether anything you watch was recalled. Try again when you have a connection.</Small>
+              </View>
+            </View>
+            <Button title="Try again" variant="secondary" icon="refresh" onPress={retry} />
+          </Card>
+        ) : status === "needs_look" ? (
           <Card tone={open.some((a) => a.recall.severity === "critical") ? "critical" : "high"}>
             <View style={styles.heroRow}>
               <Ionicons name="alert-circle" size={28} color={open.some((a) => a.recall.severity === "critical") ? colors.critical : colors.high} />

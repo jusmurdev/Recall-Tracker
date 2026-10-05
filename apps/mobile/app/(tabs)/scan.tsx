@@ -175,7 +175,7 @@ export default function ScanScreen() {
           <ReceiptResults result={receiptResult} />
           {!receiptResult.watched ? (
             <Button
-              title={`Watch all ${receiptResult.items.length} items`}
+              title="Watch these items"
               icon="eye"
               variant="secondary"
               loading={receipt.isPending}

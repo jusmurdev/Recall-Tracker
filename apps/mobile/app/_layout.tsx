@@ -12,6 +12,7 @@ import { usePushRegistration } from "@/hooks/usePushRegistration";
 import { useGeofenceSync } from "@/hooks/useGeofenceSync";
 import { useTimezoneSync } from "@/hooks/useTimezoneSync";
 import { colors } from "@/lib/theme";
+import { shouldPersistQuery } from "@/lib/home";
 // Registers the background geofence task at bundle load (required by iOS).
 import "@/lib/geofence";
 
@@ -37,7 +38,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 3 * 24 * 3600_000, buster: "v1" }}>
+        <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 3 * 24 * 3600_000, buster: "v1", dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery } }}>
           <Boot>
             <StatusBar style="dark" />
             <Stack
