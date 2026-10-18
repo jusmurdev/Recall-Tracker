@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { DismissAlertRequest, ResolveAlertRequest } from "@recall/shared";
 import { prisma } from "../../db/client.js";
@@ -12,16 +13,25 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
       .object({
         unreadOnly: z.enum(["true", "false", "1", "0"]).default("false").transform((v) => v === "true" || v === "1"),
         includeDismissed: z.enum(["true", "false", "1", "0"]).default("false").transform((v) => v === "true" || v === "1"),
+        includeInactiveDietMatches: z.enum(["true", "false", "1", "0"]).default("false").transform((v) => v === "true" || v === "1"),
         limit: z.coerce.number().int().min(1).max(100).default(50),
       })
       .parse(req.query);
+    // Diet matches for profiles that are currently off remain stored for history, but should
+    // not keep appearing in the active inbox. They can be requested explicitly when needed.
+    const activeDietProfiles = [...user.dietProfiles, ...(user.otherAllergens.length ? ["allergy_other"] : [])];
+    const activeDietFilter: Prisma.AlertWhereInput = {
+      OR: [{ reason: { not: "diet_match" } }, { reason: "diet_match", dietProfile: { in: activeDietProfiles } }],
+    };
+    const inboxFilter: Prisma.AlertWhereInput = q.includeInactiveDietMatches ? {} : activeDietFilter;
     const alerts = await prisma.alert.findMany({
-      where: { userId: user.id, ...(q.unreadOnly ? { readAt: null } : {}), ...(q.includeDismissed ? {} : { dismissedAt: null }) },
+      where: { userId: user.id, ...inboxFilter, ...(q.unreadOnly ? { readAt: null } : {}), ...(q.includeDismissed ? {} : { dismissedAt: null }) },
       include: { recall: true, watchItem: { select: { label: true } } },
       orderBy: [{ createdAt: "desc" }],
       take: q.limit,
     });
-    const unread = await prisma.alert.count({ where: { userId: user.id, readAt: null, dismissedAt: null } });
+    // Keep unread as the active-inbox badge count, even when history is requested above.
+    const unread = await prisma.alert.count({ where: { userId: user.id, ...activeDietFilter, readAt: null, dismissedAt: null } });
     return { items: alerts.map(serializeAlert), unread };
   });
 

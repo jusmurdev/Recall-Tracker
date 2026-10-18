@@ -543,11 +543,15 @@ describe("HTTP API (integration)", () => {
     const again = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["allergy_milk", "kosher"] } });
     expect(again.json().dietAlertsAdded).toBe(0);
     expect(again.json().dietAlertsMatching).toBeGreaterThanOrEqual(1);
-    // Milk off: its alerts stay in the inbox but no longer count as matching the profile.
+    // Milk off: its stored alerts are hidden from the active inbox, but remain available as history.
     const milkOff = await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["kosher"], otherAllergens: [] } });
     const milkAlerts = await prisma.alert.count({ where: { userId: signin.json().user.id, dietProfile: "allergy_milk" } });
     expect(milkAlerts).toBeGreaterThanOrEqual(1);
     expect(milkOff.json().dietAlertsMatching).toBe(await prisma.alert.count({ where: { userId: signin.json().user.id, dietProfile: "kosher", dismissedAt: null, resolvedAt: null } }));
+    const activeInbox = await app.inject({ method: "GET", url: "/v1/alerts", headers: dietAuth });
+    expect(activeInbox.json().items.some((a: { reason: string; dietProfile: string }) => a.reason === "diet_match" && a.dietProfile === "allergy_milk")).toBe(false);
+    const history = await app.inject({ method: "GET", url: "/v1/alerts?includeInactiveDietMatches=true", headers: dietAuth });
+    expect(history.json().items.some((a: { reason: string; dietProfile: string }) => a.reason === "diet_match" && a.dietProfile === "allergy_milk")).toBe(true);
     await app.inject({ method: "PATCH", url: "/v1/me/preferences", headers: dietAuth, payload: { dietProfiles: ["allergy_milk", "kosher"], otherAllergens: ["mustard"] } });
     const me = await app.inject({ method: "GET", url: "/v1/me", headers: dietAuth });
     expect(me.json().diet.dietProfiles).toEqual(["allergy_milk", "kosher"]);
