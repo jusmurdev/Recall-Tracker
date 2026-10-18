@@ -3,6 +3,7 @@ import type { RecallSource } from "@recall/shared";
 import { env } from "../config/env.js";
 import { prisma } from "../db/client.js";
 import { logger } from "../lib/logger.js";
+import { ingestFailureAdvice } from "./failureAdvice.js";
 import { matchRecalls } from "../matching/engine.js";
 import { contentHash } from "./normalize.js";
 import { buildAdapter, type Fetcher } from "./sources/index.js";
@@ -72,6 +73,8 @@ export async function ingestSource(source: RecallSource, opts: { fetcher?: Fetch
     return { source, fetched: items.length, inserted, updated, unchanged, alertsCreated, changedRecallIds: changed.map((c) => c.id) };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const advice = ingestFailureAdvice(source, err);
+    if (advice) log.warn({ status: 403 }, advice);
     log.error({ err }, "ingest failed");
     await prisma.$transaction([
       prisma.sourceSyncState.update({

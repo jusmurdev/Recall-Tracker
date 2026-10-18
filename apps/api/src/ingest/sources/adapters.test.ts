@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { HttpError } from "../../lib/http.js";
 import { fixtureFetcher } from "../fixtureLoader.js";
+import { ingestFailureAdvice } from "../failureAdvice.js";
 import { CpscAdapter, cpscSeverity } from "./cpsc.js";
 import { FdaAdapter, categorize, classifySeverity, openFdaUrl } from "./fda.js";
 import { FsisAdapter, companyFromTitle } from "./fsis.js";
@@ -50,6 +52,12 @@ describe("FDA adapter", () => {
 });
 
 describe("FSIS adapter", () => {
+  it("gives actionable guidance for an FSIS edge 403 without treating it as a header issue", () => {
+    const advice = ingestFailureAdvice("FSIS", new HttpError(403, "https://www.fsis.usda.gov/fsis/api/recall/v/1"));
+    expect(advice).toContain("different network or egress IP");
+    expect(advice).toContain("Changing User-Agent headers is not expected to help");
+    expect(ingestFailureAdvice("FDA", new HttpError(403, "https://api.fda.gov"))).toBeNull();
+  });
   it("extracts company from the headline", () => {
     expect(companyFromTitle("Boar's Head Provisions Co. Recalls Ready-To-Eat Liverwurst Products")).toBe("Boar's Head Provisions Co.");
     expect(companyFromTitle("FSIS Issues Public Health Alert for Frozen Chicken")).toBe("FSIS");

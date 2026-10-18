@@ -28,6 +28,7 @@ ingestion worker calls them; clients read from our database.
 
 - Endpoint: `https://www.fsis.usda.gov/fsis/api/recall/v/1`
 - Docs: https://www.fsis.usda.gov/science-data/developer-resources/recall-api
+- **Known limitation:** Some ingestion hosts receive HTTP 403 from the Akamai edge, regardless of the descriptive or default User-Agent. This is a host/network egress restriction, not a missing API header; run ingestion from a different network or egress IP. Until access is restored, USDA meat and poultry recalls may be missing from the feed.
 - Returns the full recent list as a JSON array (`field_*` keys). Server-side filters are
   taxonomy-id based, so we filter client-side on `field_last_modified_date` /
   `field_recall_date`.
