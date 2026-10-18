@@ -4,11 +4,11 @@ import React from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActionTile, Body, Button, Card, Heading, Loading, OfflineNotice, PremiumTag, RecallRow, Small, Title } from "@/components/ui";
-import { ApiError } from "@/api/client";
 import { useAlerts, useMe, useRecallFeed, useReceipts, useRestaurantUpdates, useWatchlist } from "@/hooks/queries";
 import { useLocationState } from "@/hooks/useLocationState";
 import { whyAlert } from "@/lib/friendly";
 import { dietHeadline } from "@/lib/diet";
+import { queryContentState } from "@/lib/queryContentState";
 import { homeStatus } from "@/lib/home";
 import { colors, radius, spacing } from "@/lib/theme";
 
@@ -35,8 +35,9 @@ export default function HomeScreen() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const latest = feed.data?.pages[0]?.items.slice(0, 3) ?? [];
-  const offlineErr = (e: unknown) => !!e && (e instanceof ApiError ? e.offline : true);
-  const offline = (alerts.isError && offlineErr(alerts.error)) || (feed.isError && offlineErr(feed.error));
+  const watchlistState = queryContentState(list, watching);
+  const feedState = queryContentState(feed, latest.length);
+  const stale = queryContentState(alerts, open.length) === "stale" || feedState === "stale";
   const retry = () => void Promise.all([alerts.refetch(), list.refetch(), feed.refetch(), me.refetch()]);
   const status = homeStatus(alerts, open.length);
 
@@ -47,7 +48,7 @@ export default function HomeScreen() {
           <Small>{greeting}</Small>
           <Title>Recall Tracker</Title>
         </View>
-        {offline && status !== "unknown" ? <OfflineNotice stale={!!alerts.data || !!feed.data} onRetry={retry} /> : null}
+        {stale ? <OfflineNotice stale onRetry={retry} /> : null}
 
         {status === "loading" ? (
           <Loading />
@@ -146,20 +147,25 @@ export default function HomeScreen() {
           </Card>
         </Pressable>
 
-        <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
-          <Card>
-            <View style={styles.heroRow}>
-              <View style={[styles.iconBubble, { backgroundColor: colors.accentSoft }]}>
-                <Ionicons name="eye" size={20} color={colors.accent} />
+        {watchlistState === "stale" ? <OfflineNotice stale onRetry={() => void list.refetch()} /> : null}
+        {watchlistState === "error" ? (
+          <OfflineNotice onRetry={() => void list.refetch()} />
+        ) : watchlistState === "loading" ? <Loading /> : (
+          <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
+            <Card>
+              <View style={styles.heroRow}>
+                <View style={[styles.iconBubble, { backgroundColor: colors.accentSoft }]}>
+                  <Ionicons name="eye" size={20} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Body style={{ fontWeight: "700" }}>{watching ? `Watching ${watching} item${watching === 1 ? "" : "s"}` : "Not watching anything yet"}</Body>
+                  <Small>{watching ? "Brands, barcodes, restaurants and categories" : "Start with the staples in your fridge"}</Small>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Body style={{ fontWeight: "700" }}>{watching ? `Watching ${watching} item${watching === 1 ? "" : "s"}` : "Not watching anything yet"}</Body>
-                <Small>{watching ? "Brands, barcodes, restaurants and categories" : "Start with the staples in your fridge"}</Small>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-            </View>
-          </Card>
-        </Pressable>
+            </Card>
+          </Pressable>
+        )}
 
         <View style={{ gap: spacing(1) }}>
           <View style={styles.sectionRow}>
@@ -168,7 +174,7 @@ export default function HomeScreen() {
               <Text style={styles.link}>Browse all</Text>
             </Pressable>
           </View>
-          {latest.length ? latest.map((r) => <RecallRow key={r.id} recall={r} onPress={() => router.push(`/recall/${r.id}`)} />) : feed.isLoading ? <Loading /> : <Small>No serious recalls this week. Nice.</Small>}
+          {latest.length ? latest.map((r) => <RecallRow key={r.id} recall={r} onPress={() => router.push(`/recall/${r.id}`)} />) : feedState === "loading" ? <Loading /> : feedState === "error" ? <OfflineNotice onRetry={() => void feed.refetch()} /> : <Small>No serious recalls this week. Nice.</Small>}
         </View>
 
         {me.data?.tier !== "premium" ? (

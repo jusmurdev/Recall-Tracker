@@ -4,15 +4,17 @@ import { FlatList, RefreshControl, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
-import { Button, Empty, Loading, RecallRow, Small, Title } from "@/components/ui";
+import { Button, Empty, Loading, OfflineNotice, RecallRow, Small, Title } from "@/components/ui";
 import { useAlerts } from "@/hooks/queries";
 import { whyAlert } from "@/lib/friendly";
+import { queryContentState } from "@/lib/queryContentState";
 import { colors, spacing } from "@/lib/theme";
 
 export default function AlertsScreen() {
   const alerts = useAlerts();
   const qc = useQueryClient();
   const items = [...(alerts.data?.items ?? [])].sort((a, b) => Number(!!a.resolvedAt) - Number(!!b.resolvedAt));
+  const contentState = queryContentState(alerts, items.length);
   const unread = alerts.data?.unread ?? 0;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={["top"]}>
@@ -27,6 +29,7 @@ export default function AlertsScreen() {
               <Title>Alerts</Title>
               <Small>{unread ? `${unread} new. Tap one to see what to do.` : items.length ? "Nothing new. These are the ones you've seen." : "Recalls that match what you watch show up here."}</Small>
             </View>
+            {contentState === "stale" ? <OfflineNotice stale onRetry={() => void alerts.refetch()} /> : null}
             {unread > 0 ? (
               <Button
                 title="Mark all as seen"
@@ -39,7 +42,7 @@ export default function AlertsScreen() {
             ) : null}
           </View>
         }
-        ListEmptyComponent={alerts.isLoading ? <Loading /> : <Empty icon="notifications-off-outline" title="No alerts yet" body="When something you watch gets recalled, you'll hear about it here and on your lock screen." />}
+        ListEmptyComponent={contentState === "loading" ? <Loading /> : contentState === "error" ? <OfflineNotice onRetry={() => void alerts.refetch()} /> : <Empty icon="notifications-off-outline" title="No alerts yet" body="When something you watch gets recalled, you'll hear about it here and on your lock screen." />}
         renderItem={({ item }) => (
           <View style={{ opacity: item.resolvedAt ? 0.55 : 1 }}>
             <RecallRow recall={item.recall} note={item.resolvedAt ? "✓ Handled" : whyAlert(item)} onPress={() => router.push(`/alert/${item.id}`)} />

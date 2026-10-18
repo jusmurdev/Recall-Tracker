@@ -4,9 +4,10 @@ import React from "react";
 import { Alert as RNAlert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import type { WatchItem } from "@recall/shared";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActionTile, Empty, Loading, PremiumTag, Screen, Small, Title } from "@/components/ui";
+import { ActionTile, Empty, Loading, OfflineNotice, PremiumTag, Screen, Small, Title } from "@/components/ui";
 import { useDeleteWatchItem, useMe, useWatchlist } from "@/hooks/queries";
 import { CATEGORY_FRIENDLY } from "@/lib/friendly";
+import { queryContentState } from "@/lib/queryContentState";
 import { colors, radius, spacing } from "@/lib/theme";
 
 const KIND: Record<WatchItem["kind"], { icon: React.ComponentProps<typeof Ionicons>["name"]; label: string }> = {
@@ -22,6 +23,7 @@ export default function WatchlistScreen() {
   const me = useMe();
   const del = useDeleteWatchItem();
   const items = list.data?.items ?? [];
+  const contentState = queryContentState(list, items.length);
   const premium = me.data?.tier === "premium";
 
   return (
@@ -38,6 +40,7 @@ export default function WatchlistScreen() {
               <Ionicons name="chevron-back" size={20} color={colors.accent} />
               <Text style={{ color: colors.accent, fontWeight: "700" }}>Home</Text>
             </Pressable>
+            {contentState === "stale" ? <OfflineNotice stale onRetry={() => void list.refetch()} /> : null}
             <Title>Things you watch</Title>
             <Small>We check every new recall against these and tell you if there's a match.</Small>
             <View style={{ flexDirection: "row", gap: spacing(1.5) }}>
@@ -56,7 +59,7 @@ export default function WatchlistScreen() {
             </Pressable>
           </View>
         }
-        ListEmptyComponent={list.isLoading ? <Loading /> : <Empty icon="eye-outline" title="Nothing yet" body="Start with the staples: the peanut butter, the baby formula, the dog food." />}
+        ListEmptyComponent={contentState === "loading" ? <Loading /> : contentState === "error" ? <OfflineNotice onRetry={() => void list.refetch()} /> : <Empty icon="eye-outline" title="Nothing yet" body="Start with the staples: the peanut butter, the baby formula, the dog food." />}
         renderItem={({ item }) => (
           <Pressable onPress={() => router.push(`/watch/${item.id}`)} style={styles.row} accessibilityRole="button" accessibilityLabel={item.label}>
             <View style={[styles.icon, { backgroundColor: item.kind === "restaurant" ? colors.premiumSoft : colors.accentSoft }]}>
