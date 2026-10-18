@@ -8,6 +8,8 @@ import { useRecall } from "@/hooks/queries";
 import { useBottomPad } from "@/hooks/useBottomPad";
 import { CATEGORY_EMOJI, SEVERITY, displayBarcode, headline, plainReason } from "@/lib/friendly";
 import { colors, severityColor, spacing } from "@/lib/theme";
+import { detailQueryState } from "@/lib/detailQueryState";
+import { DetailLoadFailure } from "@/components/DetailLoadFailure";
 
 /**
  * Recall detail, calm by default: what it is, how worried to be, what to do. The agency
@@ -17,14 +19,16 @@ export default function RecallDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const q = useRecall(id);
   const bottomPad = useBottomPad();
-  if (q.isLoading || !q.data) {
+  const loadState = detailQueryState(q.data, q.error);
+  if (loadState === "loading") {
     return (
       <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
   }
-  const r = q.data;
+  if (loadState !== "success") return <DetailLoadFailure subject="recall" notFound={loadState === "notFound"} onRetry={() => void q.refetch()} />;
+  const r = q.data!;
   const sev = SEVERITY[r.severity];
   const share = () => void Share.share({ title: headline(r), message: `${headline(r)} — ${plainReason(r.reason, r.summary)}\n${r.url ?? ""}\n\nvia Recall Tracker: recalltracker://recall/${r.id}` });
   const steps = (r.remedy ?? "").split(/(?<=[.!])\s+/).map((s) => s.trim()).filter((s) => s.length > 8).slice(0, 4);

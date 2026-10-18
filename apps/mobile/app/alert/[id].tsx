@@ -8,6 +8,8 @@ import { useBottomPad } from "@/hooks/useBottomPad";
 import { CATEGORY_EMOJI, SEVERITY, headline, plainReason, whyAlert } from "@/lib/friendly";
 import { DIET_KIND_LABEL, excerptAround, highlightSegments, profileLabel } from "@/lib/diet";
 import { colors, spacing } from "@/lib/theme";
+import { detailQueryState } from "@/lib/detailQueryState";
+import { DetailLoadFailure } from "@/components/DetailLoadFailure";
 
 const ACTION_LABEL: Record<string, string> = {
   discarded: "You threw it away",
@@ -23,18 +25,20 @@ export default function AlertDetail() {
   const markRead = useMarkRead();
   const actions = useAlertAction();
   const bottomPad = useBottomPad();
+  const loadState = detailQueryState(q.data, q.error);
   useEffect(() => {
     if (q.data && !q.data.readAt) markRead.mutate(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data?.id]);
-  if (!q.data) {
+  if (loadState === "loading") {
     return (
       <Screen edges={["bottom"]}>
         <Loading />
       </Screen>
     );
   }
-  const a = q.data;
+  if (loadState !== "success") return <DetailLoadFailure subject="alert" notFound={loadState === "notFound"} onRetry={() => void q.refetch()} />;
+  const a = q.data!;
   const r = a.recall;
   const steps = (r.remedy ?? "").split(/(?<=[.!])\s+/).map((s) => s.trim()).filter((s) => s.length > 8).slice(0, 3);
 
