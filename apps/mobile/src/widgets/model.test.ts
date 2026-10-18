@@ -52,6 +52,13 @@ describe("widget wording", () => {
     expect(JSON.stringify(v)).not.toMatch(/peanut|milk|allerg|halal|kosher|vegan|gluten/i);
     expect(v.rows[0]).toMatchObject({ text: "Granola Bars", label: "Serious", uri: "recalltracker://alert/x" });
   });
+  it("hides allergen and diet terms embedded in product headlines", () => {
+    const alerts = [alert("private", { reason: "diet_match", recall: recall("critical", "Acme: Peanut Milk Gluten-Free Vegan Mustard Bars") })];
+    const v = widgetView(buildSnapshot({ alerts, watching: 3, dietOn: true, checkedAt: NOW }), NOW);
+    expect(v.rows[0]).toMatchObject({ text: "Recalled product", label: "Serious" });
+    expect(JSON.stringify(v)).not.toMatch(/peanut|milk|gluten|halal|kosher|vegan|mustard|allerg/i);
+    expect(v.title).toBe("1 recall matches your diet profile");
+  });
   it("counts things that need a look and points to the rest", () => {
     const alerts = ["1", "2", "3", "4", "5"].map((id) => alert(id));
     const v = widgetView(buildSnapshot({ alerts, watching: 5, dietOn: false, checkedAt: NOW }), NOW);

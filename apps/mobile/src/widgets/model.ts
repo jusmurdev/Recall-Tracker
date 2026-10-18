@@ -43,6 +43,14 @@ type AlertLike = Pick<Alert, "id" | "reason" | "score" | "readAt" | "resolvedAt"
 
 const SEVERITY_RANK: Record<RecallSeverity, number> = { critical: 3, high: 2, low: 1, unknown: 0 };
 
+// Recall/product names can contain the very allergen or diet profile that triggered an alert.
+// Widgets are visible on the home screen, so replace those names rather than exposing them.
+const PRIVATE_DIET_TERM = /\b(?:peanut|milk|gluten|halal|kosher|vegan|mustard|allerg\w*)\b/i;
+const widgetHeadline = (a: AlertLike) => {
+  const text = headline(a.recall);
+  return PRIVATE_DIET_TERM.test(text) ? "Recalled product" : text;
+};
+
 export function buildSnapshot(input: { alerts: AlertLike[]; watching: number; dietOn: boolean; checkedAt: Date }): WidgetSnapshot {
   const open = input.alerts.filter((a) => !a.resolvedAt && !a.dismissedAt);
   const isDiet = (a: AlertLike) => input.dietOn && a.reason === "diet_match";
@@ -56,7 +64,7 @@ export function buildSnapshot(input: { alerts: AlertLike[]; watching: number; di
     unreadCount: open.filter((a) => !a.readAt).length,
     dietCount: open.filter(isDiet).length,
     watching: input.watching,
-    rows: ordered.slice(0, MAX_ROWS).map((a) => ({ id: a.id, headline: headline(a.recall), severity: a.recall.severity, diet: isDiet(a) })),
+    rows: ordered.slice(0, MAX_ROWS).map((a) => ({ id: a.id, headline: widgetHeadline(a), severity: a.recall.severity, diet: isDiet(a) })),
   };
 }
 
