@@ -50,7 +50,7 @@ describe("widget wording", () => {
     expect(v.title).toBe("1 recall matches your diet profile");
     expect(v.tone).toBe("critical");
     expect(JSON.stringify(v)).not.toMatch(/peanut|milk|allerg|halal|kosher|vegan|gluten/i);
-    expect(v.rows[0]).toMatchObject({ text: "Granola Bars", label: "Serious", uri: "recalltracker://alert/x" });
+    expect(v.rows[0]).toMatchObject({ text: "Recalled product", label: "Serious", uri: "recalltracker://alert/x" });
   });
   it("hides allergen and diet terms embedded in product headlines", () => {
     const alerts = [alert("private", { reason: "diet_match", recall: recall("critical", "Acme: Peanut Milk Gluten-Free Vegan Mustard Bars") })];
@@ -58,6 +58,21 @@ describe("widget wording", () => {
     expect(v.rows[0]).toMatchObject({ text: "Recalled product", label: "Serious" });
     expect(JSON.stringify(v)).not.toMatch(/peanut|milk|gluten|halal|kosher|vegan|mustard|allerg/i);
     expect(v.title).toBe("1 recall matches your diet profile");
+  });
+  it("redacts diet-match headlines for plurals, standard profiles and custom allergens", () => {
+    const alerts = [
+      alert("a", { reason: "diet_match", recall: recall("high", "Acme: Dry Roasted Peanuts") }),
+      alert("b", { reason: "diet_match", recall: recall("high", "Acme: Egg and Soy Sauce") }),
+      alert("custom", { reason: "diet_match", recall: recall("high", "Acme: Lupin Flour") }),
+    ];
+    const snap = buildSnapshot({ alerts, watching: 3, dietOn: true, checkedAt: NOW });
+    expect(snap.rows.map((row) => row.headline)).toEqual(["Recalled product", "Recalled product", "Recalled product"]);
+    expect(snap.rows.map((row) => row.headline).join(" ")).not.toMatch(/peanuts|egg|soy|lupin/i);
+  });
+  it("preserves watchlist headlines when diet mode is off", () => {
+    const alerts = [alert("watchlist", { recall: recall("high", "Jif: Peanut Butter") })];
+    const snap = buildSnapshot({ alerts, watching: 1, dietOn: false, checkedAt: NOW });
+    expect(snap.rows[0]!.headline).toBe("Peanut Butter");
   });
   it("counts things that need a look and points to the rest", () => {
     const alerts = ["1", "2", "3", "4", "5"].map((id) => alert(id));
