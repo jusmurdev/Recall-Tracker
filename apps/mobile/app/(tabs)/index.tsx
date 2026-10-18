@@ -147,8 +147,8 @@ export default function HomeScreen() {
           </Card>
         </Pressable>
 
-        {watchlistState === "stale" ? <OfflineNotice stale onRetry={() => void list.refetch()} /> : null}
-        {watchlistState === "error" ? (
+        {watchlistState === "stale" && status !== "unknown" ? <OfflineNotice stale onRetry={() => void list.refetch()} /> : null}
+        {watchlistState === "error" ? status === "unknown" ? null : (
           <OfflineNotice onRetry={() => void list.refetch()} />
         ) : watchlistState === "loading" ? <Loading /> : (
           <Pressable onPress={() => router.push("/watchlist")} accessibilityRole="button">
